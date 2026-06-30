@@ -44,11 +44,34 @@
   }
   button:hover { background: #27ae60; transform: translateY(-1px); }
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #cfe8ff; }
+
+  /* soft underwater vignette for depth */
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 2;
+    background: radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 45%, rgba(0,10,22,0.55) 100%);
+  }
+
+  /* credit bar: National Marine Aquarium + Ocean Conservation Trust */
+  #credits {
+    position: fixed; left: 0; right: 0; top: auto; bottom: 10px; z-index: 3;
+    display: flex; gap: 26px; justify-content: center; align-items: center;
+    pointer-events: none; opacity: 0.92;
+  }
+  #credits .brand { display: flex; align-items: center; gap: 9px; }
+  #credits .logo { height: 30px; width: auto; display: block; }
+  #credits .wordmark {
+    color: #eaf6ff; text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+    font-size: 0.72rem; letter-spacing: 0.6px; line-height: 1.1; text-align: left;
+  }
+  #credits .wordmark b { display: block; font-size: 0.82rem; letter-spacing: 1px; }
+  #credits .dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(159,232,255,0.6); }
+  @media (max-width: 520px) { #credits .wordmark { font-size: 0.6rem; } #credits { gap: 14px; } }
 </style>
 </head>
 <body>
   <div id="loading">Loading the ocean…</div>
   <canvas id="c"></canvas>
+  <div id="vignette"></div>
 
   <div id="hud" class="layer" style="display:none">
     <div><div class="lbl">SCORE</div><div class="big"><span id="score">0</span></div></div>
@@ -65,6 +88,18 @@
       </div>
       <button id="play">Start Swimming</button>
       <div style="margin-top:14px"><a href="index.html" style="color:#9fe8ff;text-decoration:none;font-size:0.85rem;pointer-events:auto">&larr; More games</a></div>
+    </div>
+  </div>
+
+  <div id="credits">
+    <div class="brand">
+      <img class="logo" src="assets/logos/nma.png" alt="" onerror="this.remove()">
+      <span class="wordmark"><b>National Marine Aquarium</b>Plymouth</span>
+    </div>
+    <div class="dot"></div>
+    <div class="brand">
+      <img class="logo" src="assets/logos/oct.png" alt="" onerror="this.remove()">
+      <span class="wordmark"><b>Ocean Conservation Trust</b>Protecting our ocean</span>
     </div>
   </div>
 
