@@ -153,6 +153,14 @@ tail.rotation.x = -Math.PI / 2;
 tail.position.set(0, -0.1, -2.0);
 turtle.add(tail);
 
+// protective bubble shown during the start grace period
+const shield = new THREE.Mesh(
+  new THREE.SphereGeometry(2.6, 20, 16),
+  new THREE.MeshStandardMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false })
+);
+shield.visible = false;
+turtle.add(shield);
+
 turtle.rotation.y = Math.PI; // face into the screen (-z)
 
 // ---------- Plastic bags ----------
@@ -193,7 +201,7 @@ const xRange = 5.2, yRange = 3.0;
 function placeBag(bag, initial) {
   bag.position.x = (Math.random() - 0.5) * 2 * xRange;
   bag.position.y = (Math.random() - 0.5) * 2 * yRange;
-  bag.position.z = initial ? -10 - Math.random() * 60 : SPAWN_Z - Math.random() * 20;
+  bag.position.z = initial ? -26 - Math.random() * 50 : SPAWN_Z - Math.random() * 20;
   bag.userData.spin = (Math.random() - 0.5) * 1.2;
   bag.userData.bob = Math.random() * Math.PI * 2;
   bag.userData.scored = false;
@@ -241,6 +249,8 @@ window.addEventListener('touchmove', (e) => {
 // ---------- Game state ----------
 let running = false;
 let score = 0, dodged = 0, speed = 18;
+let graceUntil = 0;        // collisions disabled until this time (start grace period)
+const GRACE = 2.0;         // seconds of safe swimming at the start of each run
 const scoreEl = document.getElementById('score');
 const dodgedEl = document.getElementById('dodged');
 const panel = document.getElementById('panel');
@@ -253,6 +263,7 @@ function startGame() {
   target.x = 0; target.y = 0;
   turtle.position.set(0, 0, 0);
   bags.forEach((b) => placeBag(b, true));
+  graceUntil = clock.elapsedTime + GRACE;
   scoreEl.textContent = '0';
   dodgedEl.textContent = '0';
   panel.classList.add('hidden');
@@ -306,6 +317,14 @@ function animate() {
   turtle.rotation.z = THREE.MathUtils.lerp(turtle.rotation.z, -vx * 4, 0.15);
   turtle.rotation.x = THREE.MathUtils.lerp(turtle.rotation.x, vy * 3, 0.15);
 
+  // grace-period shield: visible & pulsing while invulnerable at the start
+  const inGrace = running && t < graceUntil;
+  shield.visible = inGrace;
+  if (inGrace) {
+    shield.material.opacity = 0.12 + Math.abs(Math.sin(t * 6)) * 0.14;
+    shield.scale.setScalar(1 + Math.sin(t * 6) * 0.04);
+  }
+
   // flipper flap
   flippers.forEach((f, i) => {
     f.pivot.rotation.z = Math.sin(t * 6 + (i % 2) * Math.PI) * 0.5 * (f.x < 0 ? 1 : -1);
@@ -330,8 +349,8 @@ function animate() {
       // recycle
       if (bag.position.z > 12) placeBag(bag, false);
 
-      // collision near the turtle plane
-      if (bag.position.z > -1.2 && bag.position.z < 1.2) {
+      // collision near the turtle plane (disabled during the start grace period)
+      if (t > graceUntil && bag.position.z > -1.2 && bag.position.z < 1.2) {
         const dx = bag.position.x - turtle.position.x;
         const dy = bag.position.y - turtle.position.y;
         const hitR = TURTLE_R + 0.5 * bag.scale.x;
