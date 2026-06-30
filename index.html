@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scrub Friday! - National Marine Aquarium</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-container">
+    <header>
+      <h1>🐢 Scrub Friday the Turtle!</h1>
+      <p class="subtitle">National Marine Aquarium, Plymouth</p>
+    </header>
+
+    <div id="hud">
+      <div class="hud-item">Score: <span id="score">0</span></div>
+      <div class="hud-item">Time: <span id="time">30</span>s</div>
+      <div class="hud-item">Level: <span id="level">1</span></div>
+    </div>
+
+    <div id="stage">
+      <div id="turtle-wrap">
+        <svg id="turtle" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="80" cy="150" rx="35" ry="22" fill="#3c8c5c" />
+          <ellipse cx="340" cy="150" rx="30" ry="20" fill="#3c8c5c" />
+          <ellipse cx="120" cy="80" rx="22" ry="18" fill="#3c8c5c" />
+          <ellipse cx="280" cy="80" rx="22" ry="18" fill="#3c8c5c" />
+          <ellipse cx="120" cy="220" rx="22" ry="18" fill="#3c8c5c" />
+          <ellipse cx="280" cy="220" rx="22" ry="18" fill="#3c8c5c" />
+          <circle cx="60" cy="150" r="28" fill="#4caf6e" />
+          <circle cx="48" cy="142" r="4" fill="#1a1a1a" />
+          <ellipse id="shell" cx="200" cy="150" rx="150" ry="100" fill="#7a5230" stroke="#4a3018" stroke-width="4"/>
+          <g id="shell-pattern" fill="#5c3d22" stroke="#4a3018" stroke-width="2">
+            <polygon points="200,90 230,120 215,150 185,150 170,120"/>
+            <polygon points="140,110 170,120 160,150 130,150 115,125"/>
+            <polygon points="260,110 230,120 240,150 270,150 285,125"/>
+            <polygon points="200,150 215,150 225,180 200,200 175,180 185,150"/>
+            <polygon points="130,150 160,150 175,180 150,200 115,180"/>
+            <polygon points="270,150 240,150 225,180 250,200 285,180"/>
+          </g>
+        </svg>
+        <div id="spots-layer"></div>
+      </div>
+      <div id="sponge" aria-hidden="true">🧽</div>
+    </div>
+
+    <div id="overlay">
+      <div id="overlay-content">
+        <h2 id="overlay-title">Friday Needs Your Help!</h2>
+        <p id="overlay-text">
+          Aptasia anemones have spread across Friday's shell! Click or tap each
+          aptasia spot to scrub it clean before time runs out. Clear the shell
+          to level up — Friday gets faster every round!
+        </p>
+        <button id="start-btn">Start Scrubbing</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
