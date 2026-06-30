@@ -43,114 +43,231 @@ scene.add(turtle);
 
 // Realistic green sea turtle palette: olive/brown mottled carapace,
 // pale cream plastron and limb undersides, spotted olive head.
-const CARAPACE = 0x7d8a4a;   // olive-green shell
-const CARAPACE_DK = 0x555e2e; // darker mottled patches
-const CARAPACE_BR = 0x8a6f3a; // brownish streaks
-const CREAM = 0xe8e2c4;       // pale plastron / underside
-const SKIN = 0x9aa05c;        // olive limb/head skin
+const CREAM = 0xe7e0c0;       // pale plastron / underside
+const SKIN = 0x8f9655;        // olive limb/head skin
 const SPOT = 0x3a3320;        // dark head spots
 
-const shellMat = new THREE.MeshStandardMaterial({ color: CARAPACE, roughness: 0.65, flatShading: true });
-// elongated tear-drop carapace (wider at front shoulders, tapering to rear)
-const shell = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), shellMat);
-shell.scale.set(1.45, 0.5, 1.95);
-const sp = shell.geometry.attributes.position;
-for (let i = 0; i < sp.count; i++) {
-  const z = sp.getZ(i);
-  if (z < 0) { sp.setX(i, sp.getX(i) * (1 + z * 0.18)); } // taper the tail end
+// ---- Procedural carapace texture (scute pattern + streaks + mottling) ----
+function makeCarapaceTexture() {
+  const S = 512, cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  const cx = S / 2, cy = S / 2, A = S * 0.49, B = S * 0.49;
+
+  g.fillStyle = '#6f7a3c'; g.fillRect(0, 0, S, S);
+  g.save();
+  g.beginPath(); g.ellipse(cx, cy, A, B, 0, 0, Math.PI * 2); g.clip();
+
+  const grad = g.createRadialGradient(cx, cy * 0.85, 30, cx, cy, A);
+  grad.addColorStop(0, '#929a55'); grad.addColorStop(0.6, '#717a3a'); grad.addColorStop(1, '#4f562a');
+  g.fillStyle = grad; g.fillRect(0, 0, S, S);
+
+  function scute(px, py, rx, ry, sides, rot, fill, streak) {
+    g.beginPath();
+    for (let k = 0; k <= sides; k++) {
+      const a = rot + (k / sides) * Math.PI * 2;
+      const wob = 0.88 + 0.12 * Math.sin(k * 1.7 + px);
+      const X = px + Math.cos(a) * rx * wob, Y = py + Math.sin(a) * ry * wob;
+      k === 0 ? g.moveTo(X, Y) : g.lineTo(X, Y);
+    }
+    g.closePath();
+    g.fillStyle = fill; g.fill();
+    if (streak) {                       // light radiating streaks (green-turtle costal scutes)
+      g.save(); g.clip();
+      g.strokeStyle = 'rgba(178,184,118,0.55)'; g.lineWidth = 3;
+      for (let s = 0; s < 6; s++) {
+        const a = rot + (s / 6 - 0.5) * 1.4;
+        g.beginPath();
+        g.moveTo(px - Math.cos(a) * rx * 0.2, py - Math.sin(a) * ry * 0.2);
+        g.lineTo(px + Math.cos(a) * rx * 1.2, py + Math.sin(a) * ry * 1.2);
+        g.stroke();
+      }
+      g.restore();
+    }
+    g.lineWidth = 4; g.strokeStyle = '#383d1e'; g.stroke();
+  }
+
+  // vertebral column (5 central scutes)
+  const vsh = ['#7e8847', '#737c3e', '#828c4a', '#6d763b', '#79824a'];
+  for (let i = 0; i < 5; i++)
+    scute(cx, cy - B * 0.6 + i * (B * 1.2 / 4), A * 0.15, B * 0.14, 6, Math.PI / 6, vsh[i], false);
+
+  // costal scutes (4 per side) with streaks
+  for (const side of [-1, 1])
+    for (let i = 0; i < 4; i++)
+      scute(cx + side * A * 0.43, cy - B * 0.52 + i * (B * 1.04 / 3),
+        A * 0.2, B * 0.17, 5, side > 0 ? 0.35 : -0.35, i % 2 ? '#76803f' : '#6c753a', true);
+
+  // marginal scutes (ring around the rim)
+  const M = 24;
+  for (let i = 0; i < M; i++) {
+    const a = (i / M) * Math.PI * 2;
+    scute(cx + Math.cos(a) * A * 0.88, cy + Math.sin(a) * B * 0.88,
+      A * 0.085, B * 0.085, 4, a, i % 2 ? '#5c6430' : '#69723a', false);
+  }
+
+  // mottling blotches
+  for (let i = 0; i < 150; i++) {
+    const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random());
+    g.beginPath();
+    g.ellipse(cx + Math.cos(a) * A * r, cy + Math.sin(a) * B * r,
+      3 + Math.random() * 9, 2 + Math.random() * 6, Math.random() * Math.PI, 0, Math.PI * 2);
+    g.fillStyle = Math.random() < 0.5 ? 'rgba(58,63,28,0.16)' : 'rgba(152,160,98,0.15)';
+    g.fill();
+  }
+  g.restore();
+  const tex = new THREE.CanvasTexture(cv);
+  tex.anisotropy = 4; tex.needsUpdate = true;
+  return tex;
 }
-shell.geometry.computeVertexNormals();
+
+// ---- Procedural head texture (olive ground + dark spots, pale jaw) ----
+function makeHeadTexture() {
+  const S = 256, cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#8d9456'; g.fillRect(0, 0, S, S);
+  g.fillStyle = '#cfc89e';                          // pale lower face / jaw band
+  g.fillRect(0, S * 0.62, S, S * 0.38);
+  for (let i = 0; i < 90; i++) {                    // dark speckled scales
+    const x = Math.random() * S, y = Math.random() * S * 0.7;
+    g.beginPath();
+    g.ellipse(x, y, 3 + Math.random() * 7, 3 + Math.random() * 6, Math.random() * Math.PI, 0, Math.PI * 2);
+    g.fillStyle = `rgba(48,42,26,${0.4 + Math.random() * 0.4})`;
+    g.fill();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// ---- Domed elliptical carapace geometry with clean top-down UVs ----
+function buildCarapace(a, b, height) {
+  const RINGS = 16, SEG = 36;
+  const pos = [], uv = [], idx = [];
+  for (let i = 0; i <= RINGS; i++) {
+    const t = i / RINGS;
+    for (let j = 0; j <= SEG; j++) {
+      const ang = (j / SEG) * Math.PI * 2, ca = Math.cos(ang), sa = Math.sin(ang);
+      let x = a * t * ca, z = b * t * sa;
+      if (z < 0) x *= 1 + (z / b) * 0.16;            // taper the rear
+      let y = height * Math.cos(t * Math.PI / 2);     // domed profile
+      if (t > 0.84) y -= (t - 0.84) * height * 1.6;   // flared marginal rim dips down
+      pos.push(x, y, z);
+      uv.push(0.5 + x / (2 * a), 0.5 + z / (2 * b));
+    }
+  }
+  for (let i = 0; i < RINGS; i++)
+    for (let j = 0; j < SEG; j++) {
+      const a0 = i * (SEG + 1) + j, a1 = a0 + 1, b0 = (i + 1) * (SEG + 1) + j, b1 = b0 + 1;
+      idx.push(a0, b0, a1, a1, b0, b1);
+    }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+const shell = new THREE.Mesh(
+  buildCarapace(1.5, 2.0, 0.62),
+  new THREE.MeshStandardMaterial({ map: makeCarapaceTexture(), roughness: 0.5, metalness: 0.0, side: THREE.DoubleSide })
+);
 turtle.add(shell);
 
-// pale plastron (belly) slightly below
-const plastron = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12),
-  new THREE.MeshStandardMaterial({ color: CREAM, roughness: 0.8, flatShading: true }));
-plastron.scale.set(1.2, 0.32, 1.7);
-plastron.position.y = -0.28;
+const skinMat = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.6, metalness: 0.0, side: THREE.DoubleSide });
+const creamMat = new THREE.MeshStandardMaterial({ color: CREAM, roughness: 0.7, metalness: 0.0, side: THREE.DoubleSide });
+
+// pale plastron (belly) tucked just under the carapace
+const plastron = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 14), creamMat);
+plastron.scale.set(1.28, 0.34, 1.78);
+plastron.position.y = -0.34;
 turtle.add(plastron);
 
-// mottled scute patches scattered over the carapace (varied olive/brown shades)
-const scuteShades = [CARAPACE_DK, CARAPACE_BR, CARAPACE_DK, 0x6b7438];
-for (let i = 0; i < 16; i++) {
-  const mat = new THREE.MeshStandardMaterial({ color: scuteShades[i % scuteShades.length], roughness: 0.75, flatShading: true });
-  const patch = new THREE.Mesh(new THREE.CylinderGeometry(0.18 + Math.random() * 0.14, 0.16, 0.06, 6), mat);
-  // distribute across the top dome of the shell
-  const u = (Math.random() - 0.5) * 1.9;   // across width
-  const v = (Math.random() - 0.5) * 2.9;   // along length
-  const yTop = 0.48 * Math.sqrt(Math.max(0, 1 - (u / 1.45) ** 2 - (v / 1.95) ** 2));
-  patch.position.set(u, yTop + 0.02, v);
-  patch.rotation.y = Math.random() * Math.PI;
-  turtle.add(patch);
-}
-
-const skinMat = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.7, flatShading: true });
-const creamMat = new THREE.MeshStandardMaterial({ color: CREAM, roughness: 0.8, flatShading: true });
-
-// neck + head
-const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.42, 0.7, 10), skinMat);
+// ---- neck + head ----
+const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.46, 0.8, 12), skinMat);
 neck.rotation.x = Math.PI / 2;
-neck.position.set(0, -0.02, 1.75);
+neck.position.set(0, -0.04, 1.8);
 turtle.add(neck);
+const throat = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), creamMat);
+throat.scale.set(0.7, 0.5, 1.0);
+throat.position.set(0, -0.22, 2.0);
+turtle.add(throat);
 
-const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 14, 12), skinMat);
-head.scale.set(0.85, 0.78, 1.15);
-head.position.set(0, 0.02, 2.25);
+const headMat = new THREE.MeshStandardMaterial({ map: makeHeadTexture(), roughness: 0.6, metalness: 0.0 });
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.46, 18, 16), headMat);
+head.scale.set(0.84, 0.8, 1.18);
+head.position.set(0, 0.0, 2.35);
 turtle.add(head);
-// pale beak / lower jaw
-const beak = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), creamMat);
-beak.scale.set(0.7, 0.55, 0.8);
-beak.position.set(0, -0.13, 2.55);
+// pale pointed beak
+const beak = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 12), creamMat);
+beak.scale.set(0.62, 0.5, 0.85);
+beak.position.set(0, -0.16, 2.7);
 turtle.add(beak);
-// dark spots speckled over the head scales
-for (let i = 0; i < 14; i++) {
-  const spot = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6),
-    new THREE.MeshStandardMaterial({ color: SPOT, roughness: 0.6 }));
-  const a = Math.random() * Math.PI * 2, r = 0.3 + Math.random() * 0.12;
-  spot.position.set(Math.cos(a) * r * 0.8, 0.05 + Math.sin(a) * r * 0.7, 2.25 + (Math.random() - 0.2) * 0.35);
-  spot.scale.z = 0.4;
-  turtle.add(spot);
-}
-const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a });
+const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.25 });
 for (const sx of [-1, 1]) {
-  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), eyeMat);
-  eye.position.set(0.27 * sx, 0.08, 2.4);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 10), eyeMat);
+  eye.position.set(0.3 * sx, 0.07, 2.5);
   turtle.add(eye);
+  const nostril = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 6), eyeMat);
+  nostril.position.set(0.07 * sx, -0.05, 2.92);
+  turtle.add(nostril);
 }
 
-// flippers — large paddle-shaped front pair, smaller rear pair.
-// Built as a 2-segment pivot so they sweep like real flippers.
+// ---- paddle flippers (extruded shape, olive top + pale underside + claw) ----
+function paddleGeometry(L, w) {
+  const sh = new THREE.Shape();
+  sh.moveTo(0, 0);
+  sh.bezierCurveTo(L * 0.12, w, L * 0.55, w * 0.98, L * 0.86, w * 0.55);
+  sh.bezierCurveTo(L * 1.0, w * 0.32, L * 1.03, w * 0.1, L, 0);          // pointed tip
+  sh.bezierCurveTo(L * 1.03, -w * 0.1, L * 1.0, -w * 0.32, L * 0.86, -w * 0.55);
+  sh.bezierCurveTo(L * 0.55, -w * 0.98, L * 0.12, -w, 0, 0);
+  const geo = new THREE.ExtrudeGeometry(sh, {
+    depth: 0.08, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.05, bevelSegments: 2, steps: 1
+  });
+  geo.translate(0, 0, -0.04);
+  geo.rotateX(Math.PI / 2);   // lay flat: length along +x, thickness vertical (y)
+  geo.computeVertexNormals();
+  return geo;
+}
+
 const flippers = [];
 function makeFlipper(x, z, front) {
   const pivot = new THREE.Group();
   pivot.position.set(x, -0.05, z);
+  if (x < 0) pivot.scale.x = -1;     // mirror to the left side
 
-  const len = front ? 2.0 : 1.0;
-  const wide = front ? 0.85 : 0.6;
-  const paddle = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 8), skinMat);
-  paddle.scale.set(wide, 0.14, len);
-  // sweep the paddle outward and back from the shoulder
-  paddle.position.set(x * 0.5 * wide, 0, front ? len * 0.42 : -len * 0.42);
-  pivot.add(paddle);
+  const L = front ? 2.5 : 1.3, w = front ? 0.62 : 0.5;
+  const geo = paddleGeometry(L, w);
 
-  // pale underside trailing edge
-  const under = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 6), creamMat);
-  under.scale.set(wide * 0.7, 0.1, len * 0.8);
-  under.position.copy(paddle.position);
-  under.position.y -= 0.08;
-  pivot.add(under);
+  const top = new THREE.Mesh(geo, skinMat);
+  pivot.add(top);
+  const bottom = new THREE.Mesh(geo, creamMat);   // pale underside, just below
+  bottom.position.y = -0.07;
+  bottom.scale.set(0.97, 0.6, 0.97);
+  pivot.add(bottom);
 
+  if (front) {                        // single claw near the leading tip
+    const claw = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.18, 6), creamMat);
+    claw.position.set(L * 0.96, 0, w * 0.18);
+    claw.rotation.z = -Math.PI / 2;
+    pivot.add(claw);
+  }
+  // rest pose: front flippers swept slightly forward, rear angled back
+  pivot.rotation.y = front ? -0.5 : 1.9;
   turtle.add(pivot);
-  flippers.push({ pivot, x, front });
+  flippers.push({ pivot, x, front, baseY: pivot.rotation.y });
 }
-makeFlipper(-1.25, 0.7, true);
-makeFlipper(1.25, 0.7, true);
-makeFlipper(-1.05, -1.15, false);
-makeFlipper(1.05, -1.15, false);
+makeFlipper(-1.2, 0.85, true);
+makeFlipper(1.2, 0.85, true);
+makeFlipper(-1.0, -1.25, false);
+makeFlipper(1.0, -1.25, false);
 
 // short pointed tail
-const tail = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.6, 8), skinMat);
+const tail = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.6, 8), skinMat);
 tail.rotation.x = -Math.PI / 2;
-tail.position.set(0, -0.1, -2.0);
+tail.position.set(0, -0.12, -2.05);
 turtle.add(tail);
 
 // protective bubble shown during the start grace period
