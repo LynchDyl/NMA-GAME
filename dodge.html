@@ -17,6 +17,14 @@
   #hud .right { text-align: right; }
   #hud .big { font-size: 1.5rem; }
   #hud .lbl { font-size: 0.75rem; opacity: 0.8; letter-spacing: 1px; }
+  /* lives shown as Friday face tokens (Lego-style portraits) */
+  #lives { display: inline-flex; gap: 6px; vertical-align: middle; }
+  #lives .life {
+    width: 38px; height: 38px; border-radius: 50%; display: block;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    transition: filter 0.25s, opacity 0.25s, transform 0.25s;
+  }
+  #lives .life.lost { filter: grayscale(1) brightness(0.45); opacity: 0.5; transform: scale(0.85); }
 
   #panel {
     display: flex; align-items: center; justify-content: center;
@@ -155,7 +163,7 @@
     <div><div class="lbl">SCORE</div><div class="big"><span id="score">0</span></div></div>
     <div style="text-align:center"><div class="lbl">JELLIES</div><div class="big"><span id="jellies">0</span></div></div>
     <div style="text-align:center"><div class="lbl">🍔 BURGERS</div><div class="big"><span id="burgers">0</span></div></div>
-    <div class="right"><div class="lbl">LIVES</div><div class="big"><span id="lives">❤❤❤</span></div></div>
+    <div class="right"><div class="lbl">LIVES</div><div class="big"><span id="lives"></span></div></div>
   </div>
   <div id="crosshair"></div>
 

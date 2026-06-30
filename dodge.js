@@ -255,6 +255,29 @@ const shell = new THREE.Mesh(
 );
 turtle.add(shell);
 
+// NMA logo stickered onto the carapace. The plane is gently bowed to hug the
+// dome so it reads as printed on the shell rather than floating above it.
+const texLoader = new THREE.TextureLoader();
+const logoTex = texLoader.load('assets/logos/nma-decal.png');
+logoTex.colorSpace = THREE.SRGBColorSpace; logoTex.anisotropy = 4;
+const LOGO_W = 1.5, LOGO_H = LOGO_W * 211 / 658;
+const logoGeo = new THREE.PlaneGeometry(LOGO_W, LOGO_H, 12, 4);
+{
+  const p = logoGeo.attributes.position;          // bow down at the edges to follow the dome
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i);
+    p.setZ(i, -(x * x) * 0.34 - (y * y) * 0.5);
+  }
+  logoGeo.computeVertexNormals();
+}
+const logoDecal = new THREE.Mesh(logoGeo, new THREE.MeshStandardMaterial({
+  map: logoTex, transparent: true, roughness: 0.6, metalness: 0.0,
+  polygonOffset: true, polygonOffsetFactor: -2, depthWrite: false, side: THREE.DoubleSide,
+}));
+logoDecal.rotation.x = -Math.PI / 2;              // lie flat on the dome, text reading toward the head
+logoDecal.position.set(0, 0.66, -0.1);
+turtle.add(logoDecal);
+
 const skinMat = new THREE.MeshStandardMaterial({ color: SKIN, map: scaleTex, roughness: 0.6, metalness: 0.0, side: THREE.DoubleSide });
 const creamMat = new THREE.MeshStandardMaterial({ color: CREAM, map: scaleTex, roughness: 0.7, metalness: 0.0, side: THREE.DoubleSide });
 
@@ -863,6 +886,7 @@ const playerFwd = new THREE.Vector3(0, 0, 1);
 let firing = false;          // mouse / touch held
 let lastShot = -10;          // time of last shot/swing
 let swingT = -10;            // time the current melee swing began
+let armBlend = 0;            // eased 0→1 grip pose when a weapon is equipped
 let sharksDefeated = 0, burgersCollected = 0;
 
 // reusable bullet tracers
@@ -1278,6 +1302,86 @@ for (let i = 0; i < FISH_COUNT; i++) {
   scene.add(f);
 }
 
+// ---------- Zeus — the friendly zebra shark who defends you ----------
+// A golden, spotted shark that swims at Friday's side and charges any enemy
+// shark that strays too close, chomping it. He can't be hurt and never bites you.
+function makeLabelSprite(text, color = '#ffe46e') {
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 96;
+  const x = cv.getContext('2d');
+  x.font = 'bold 60px Segoe UI, Tahoma, sans-serif';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.lineWidth = 9; x.strokeStyle = 'rgba(0,0,0,0.7)'; x.strokeText(text, 128, 48);
+  x.fillStyle = color; x.fillText(text, 128, 48);
+  const tex = new THREE.CanvasTexture(cv);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+  sp.scale.set(3.2, 1.2, 1);
+  return sp;
+}
+const ZEUS_LEN = 5.6;
+const zeus = instantiateModel('shark', {
+  length: ZEUS_LEN, color: 0xd8b24a, rough: 0.55,
+  amp: 0.05, waves: 4.5, speed: 6.0,
+});
+// scatter friendly zebra spots across his flanks (in the model's normalized
+// space — the inner group is scaled to length, so coords stay within ±0.5)
+{
+  const spotMat = new THREE.MeshStandardMaterial({ color: 0x4a3a1e, roughness: 0.6 });
+  const inner = zeus.children[0];
+  for (let i = 0; i < 36; i++) {
+    const sp = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 6), spotMat);
+    // model length runs along local +z here (orientation is applied to `inner`)
+    sp.position.set((Math.random() - 0.5) * 0.18, (Math.random() - 0.1) * 0.18, (Math.random() - 0.5) * 0.8);
+    sp.scale.set(1, 0.5, 1);
+    inner.add(sp);
+  }
+}
+const zeusLabel = makeLabelSprite('ZEUS 🛡️', '#ffe46e');
+zeusLabel.position.set(0, 1.7, 0);
+zeus.add(zeusLabel);
+zeus.userData.yaw = 0;
+zeus.userData.vel = new THREE.Vector3();
+zeus.visible = false;
+scene.add(zeus);
+
+function updateZeus(dt, t) {
+  // find the nearest living enemy shark that's threatening Friday
+  let target = null, best = Infinity;
+  for (const s of sharks) {
+    if (!s.userData.alive) continue;
+    if (s.position.distanceTo(player.pos) > 26) continue;   // only defend close threats
+    const d = s.position.distanceTo(zeus.position);
+    if (d < best) { best = d; target = s; }
+  }
+  const desired = new THREE.Vector3();
+  let speed;
+  if (target) {
+    desired.copy(target.position);                          // charge the threat
+    speed = 17;
+    if (zeus.position.distanceTo(target.position) < 2.6 + sharkRadius(target)) {
+      damageShark(target, 5, t);                            // chomp!
+    }
+  } else {                                                  // escort: trail beside Friday
+    const hf = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw));
+    const side = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+    desired.copy(player.pos).addScaledVector(hf, -5).addScaledVector(side, 4.5);
+    desired.y += 1.4 + Math.sin(t * 0.7) * 0.6;
+    speed = 11;
+  }
+  const to = desired.sub(zeus.position);
+  const dist = to.length();
+  if (dist > 0.001) {
+    to.multiplyScalar(speed / dist);
+    zeus.userData.vel.lerp(to, Math.min(1, 2.2 * dt));      // eased acceleration
+  }
+  zeus.position.addScaledVector(zeus.userData.vel, dt);
+  zeus.position.y = Math.max(Y_MIN, Math.min(Y_MAX, zeus.position.y));
+  const v = zeus.userData.vel;
+  if (v.lengthSq() > 0.02) {
+    zeus.userData.yaw = steerAngle(zeus.userData.yaw, Math.atan2(v.z, v.x), dt * 2.2);
+    zeus.rotation.set(0, -zeus.userData.yaw, 0);
+  }
+}
+
 // ---------- Combat helpers ----------
 const AGGRO_R = 17;          // sharks notice Friday within this range
 const SHARK_CHASE = 7.5;     // chase speed (below Friday's 14 top speed → escapable)
@@ -1478,7 +1582,14 @@ const wiggleText = document.getElementById('wiggle-text');
 let wiggleShown = false;
 
 const wardrobe = document.getElementById('wardrobe');
-const hearts = (n) => '❤'.repeat(Math.max(0, n)) + '🖤'.repeat(Math.max(0, MAX_LIVES - n));
+// Lives as Friday face tokens (Lego-Star-Wars style): full portraits for the
+// lives you have, dimmed/greyed portraits for the ones you've lost.
+function renderLives(n) {
+  let html = '';
+  for (let i = 0; i < MAX_LIVES; i++)
+    html += `<img class="life${i < n ? '' : ' lost'}" src="assets/friday-face.png" alt="">`;
+  livesEl.innerHTML = html;
+}
 
 function enterWardrobe() {
   mode = 'wardrobe';
@@ -1487,6 +1598,7 @@ function enterWardrobe() {
   jellies.forEach((j) => (j.visible = false));
   burgers.forEach((b) => { b.userData.active = false; b.visible = false; });
   firing = false;
+  zeus.visible = false;
   panel.classList.add('hidden');
   hud.style.display = 'none';
   wardrobe.classList.remove('hidden');
@@ -1503,11 +1615,14 @@ function startGame() {
   jellies.forEach((j) => { j.visible = true; placeJelly(j, player.pos); });
   burgers.forEach((b) => { b.userData.active = false; b.visible = false; });
   sharks.forEach(launchShark);   // fresh, full-health sharks each run
+  zeus.visible = true;
+  zeus.position.set(player.pos.x + 4, player.pos.y + 1.4, player.pos.z - 4);
+  zeus.userData.vel.set(0, 0, 0); zeus.userData.yaw = 0;
   graceUntil = clock.elapsedTime + GRACE;
   scoreEl.textContent = '0';
   jelliesEl.textContent = '0';
   burgersEl.textContent = '0';
-  livesEl.textContent = hearts(lives);
+  renderLives(lives);
   wardrobe.classList.add('hidden');
   panel.classList.add('hidden');
   hud.style.display = 'flex';
@@ -1516,6 +1631,7 @@ function startGame() {
 
 function gameOver() {
   running = false;
+  zeus.visible = false;
   hud.style.display = 'none';
   msg.innerHTML = `Friday's out of lives! 🛑<br><br>You gobbled <strong>${jelliesEaten}</strong> moon jellies, took down <strong>${sharksDefeated}</strong> sharks 🦈, scoffed <strong>${burgersCollected}</strong> cheeseburgers 🍔 and scored <strong>${Math.floor(score)}</strong>. Marine litter is a real threat to sea turtles — thanks for steering Friday clear of it!`;
   playBtn.textContent = 'Swim Again';
@@ -1593,12 +1709,18 @@ function animate() {
   // holds a forward "grip" pose when Friday is carrying a weapon.
   const flapSpd = inWardrobe ? 2 : 6, flapAmp = inWardrobe ? 0.25 : 0.45;
   const armed = currentWeapon !== 'none';
+  armBlend += ((armed ? 1 : 0) - armBlend) * Math.min(1, 6 * dt);   // ease in/out the grip
   flippers.forEach((f, i) => {
-    if (armed && f.front && f.side > 0) {   // right front flipper reaches up/forward to grip
-      f.pivot.rotation.set(-0.25, -1.2, 0.15 + Math.sin(t * 4) * 0.04);
+    const flapZ = Math.sin(t * flapSpd + (i % 2) * Math.PI) * flapAmp * (f.x < 0 ? 1 : -1);
+    if (f.front && f.side > 0) {            // right front flipper blends to a forward grip
+      const gz = 0.15 + Math.sin(t * 4) * 0.04;
+      f.pivot.rotation.set(
+        -0.25 * armBlend,
+        f.baseY * (1 - armBlend) + (-1.2) * armBlend,
+        flapZ * (1 - armBlend) + gz * armBlend
+      );
     } else {
-      const z = Math.sin(t * flapSpd + (i % 2) * Math.PI) * flapAmp * (f.x < 0 ? 1 : -1);
-      f.pivot.rotation.set(0, f.baseY, z);
+      f.pivot.rotation.set(0, f.baseY, flapZ);
     }
   });
 
@@ -1701,7 +1823,7 @@ function updatePlay(dt, t) {
     bag.rotation.y += bag.userData.spin * dt;
     bag.position.y = bag.userData.bobBase + Math.sin(t + bag.userData.bob) * 0.3;
     if (!inGrace && bag.position.distanceTo(player.pos) < TURTLE_R + 0.6 * bag.scale.x + 0.5) {
-      lives--; livesEl.textContent = hearts(lives);
+      lives--; renderLives(lives);
       graceUntil = t + 1.6;
       player.pos.addScaledVector(fwd, -3.5); player.speed *= -0.3;
       if (lives <= 0) { gameOver(); return; }
@@ -1740,7 +1862,7 @@ function updatePlay(dt, t) {
     if (b.position.distanceTo(player.pos) < TURTLE_R + 0.9) {
       b.userData.active = false; b.visible = false;
       burgersCollected++; score += 60; chompUntil = t + 0.45;
-      if (lives < MAX_LIVES) { lives++; livesEl.textContent = hearts(lives); }
+      if (lives < MAX_LIVES) { lives++; renderLives(lives); }
       burgersEl.textContent = burgersCollected;
     }
   }
@@ -1748,6 +1870,7 @@ function updatePlay(dt, t) {
   // weapons: pose/recoil + firing, then advance any rockets/effects
   updateWeapon(dt, t);
   updateOrdnance(dt, t);
+  updateZeus(dt, t);   // friendly shark escorts Friday and hunts the enemies
 
   score += dt * 3;
   scoreEl.textContent = Math.floor(score);
@@ -1791,11 +1914,11 @@ function renderAmbient(dt, t) {
       const dx = player.pos.x - shark.position.x, dz = player.pos.z - shark.position.z, dy = player.pos.y - shark.position.y;
       const hdist = Math.hypot(dx, dz);
       if (hdist < AGGRO_R) {                          // lock on and chase
-        sd.dirA = steerAngle(sd.dirA, Math.atan2(dz, dx), dt * 1.6);
+        sd.dirA = steerAngle(sd.dirA, Math.atan2(dz, dx), dt * 1.3);
         shark.position.y += Math.sign(dy) * Math.min(Math.abs(dy), SHARK_CHASE * 0.6 * dt);
         speed = SHARK_CHASE;
         if (!inGrace && shark.position.distanceTo(player.pos) < TURTLE_R + sharkRadius(shark) * 0.7) {
-          lives--; livesEl.textContent = hearts(lives);
+          lives--; renderLives(lives);
           graceUntil = t + 1.6;
           player.pos.add(player.pos.clone().sub(shark.position).setLength(3.5));
           if (lives <= 0) gameOver();

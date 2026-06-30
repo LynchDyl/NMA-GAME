@@ -20,6 +20,10 @@ explore an open ocean** in 3D:
 - **The sharks are the bad guys.** They hunt Friday — blast them with your weapon
   and each one drops a **cheeseburger** 🍔 that you can scoff for points (and it
   heals a lost life).
+- **Zeus the zebra shark** 🛡️ is your friendly bodyguard — he escorts Friday and
+  charges any enemy shark that strays too close.
+- Lives are shown as **Friday face tokens** (Lego-style portraits), and the
+  **NMA logo** is stickered on Friday's shell.
 - Shoals of fish roam the reef, seagrass sways, light shafts and bubbles drift past.
 
 **How to play**

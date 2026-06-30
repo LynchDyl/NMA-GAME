@@ -1,0 +1,47 @@
+name: Deploy to GitHub Pages
+
+# Publishes the static game (index.html / dodge.html and assets) to GitHub
+# Pages. Runs on the default branch and on the active feature branch so the
+# site can go live before the branch is merged. Pages is enabled automatically
+# via actions/configure-pages (no manual Settings step needed, when allowed).
+
+on:
+  push:
+    branches:
+      - main
+      - claude/blender-models-game-integration-yd98yn
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; newer pushes supersede in-flight ones.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
