@@ -4,20 +4,34 @@ import * as THREE from 'three';
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;   // filmic, GTA-ish grade
+renderer.toneMappingExposure = 1.15;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a4f7a);
-scene.fog = new THREE.Fog(0x0a4f7a, 18, 65);
+scene.fog = new THREE.Fog(0x0a4f7a, 20, 70);
 
-const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 200);
 camera.position.set(0, 1.6, 7.5);
 camera.lookAt(0, 0.2, -4);
 
 // ---------- Lighting ----------
-scene.add(new THREE.HemisphereLight(0x9fe0ff, 0x06324d, 1.1));
-const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-sun.position.set(4, 12, 6);
+scene.add(new THREE.HemisphereLight(0x9fe0ff, 0x06324d, 1.0));
+const sun = new THREE.DirectionalLight(0xffffff, 1.35);   // warm key from above
+sun.position.set(5, 13, 7);
 scene.add(sun);
+const fill = new THREE.DirectionalLight(0xbfe6ff, 0.5);   // cool fill from front-left
+fill.position.set(-6, 3, 8);
+scene.add(fill);
+const rim = new THREE.DirectionalLight(0xcdf0ff, 0.7);    // cool rim from behind for separation
+rim.position.set(-2, 4, -10);
+scene.add(rim);
+// soft spotlight that lights Friday on the wardrobe turntable
+const studio = new THREE.SpotLight(0xfff4e0, 0.0, 30, Math.PI / 5, 0.5, 1.2);
+studio.position.set(0, 9, 6);
+studio.target.position.set(0, 0.4, 1.5);
+scene.add(studio); scene.add(studio.target);
 
 // God-ray-ish shafts: a few faint angled planes high above
 const shaftMat = new THREE.MeshBasicMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0.05, side: THREE.DoubleSide, depthWrite: false });
@@ -291,7 +305,279 @@ const shield = new THREE.Mesh(
 shield.visible = false;
 turtle.add(shield);
 
+// =====================================================================
+// HATS — a wardrobe of detailed hats that seat on Friday's head.
+// Each builder returns a Group whose local origin is the "seat" point;
+// the hat is added to hatAnchor, parked just above the crown so brims
+// flare clear of the head (no clipping).
+// =====================================================================
+const hatAnchor = new THREE.Group();
+hatAnchor.position.set(0, 0.40, 2.62);   // just above the crown
+turtle.add(hatAnchor);
+
+function hatMat(color, o = {}) {
+  return new THREE.MeshStandardMaterial({
+    color, roughness: o.rough ?? 0.65, metalness: o.metal ?? 0.0,
+    side: THREE.DoubleSide, flatShading: !!o.flat
+  });
+}
+function cyl(rt, rb, h, mat, seg = 24) {
+  return new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat);
+}
+
+// Cowboy hat — upturned lathe brim, creased crown, leather band.
+function hatCowboy() {
+  const g = new THREE.Group();
+  const leather = hatMat(0x6e4a29, { rough: 0.75 });
+  const dark = hatMat(0x3c2614, { rough: 0.8 });
+  const brimProfile = [
+    new THREE.Vector2(0.30, 0.05), new THREE.Vector2(0.55, 0.00),
+    new THREE.Vector2(0.78, 0.01), new THREE.Vector2(0.90, 0.10),
+    new THREE.Vector2(0.92, 0.16)
+  ];
+  const brim = new THREE.Mesh(new THREE.LatheGeometry(brimProfile, 32), leather);
+  brim.scale.set(1, 1, 0.82);           // a touch oval
+  g.add(brim);
+  const crown = cyl(0.30, 0.345, 0.42, leather);
+  crown.position.y = 0.27;
+  crown.scale.z = 0.92;
+  g.add(crown);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.30, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), leather);
+  dome.position.y = 0.48; dome.scale.set(1, 0.7, 0.92);
+  g.add(dome);
+  const crease = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.18, 0.5), dark);
+  crease.position.y = 0.55;
+  g.add(crease);
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.045, 8, 28), dark);
+  band.rotation.x = Math.PI / 2; band.position.y = 0.13; band.scale.z = 0.92;
+  g.add(band);
+  return g;
+}
+
+// Beer / drinking helmet — cap, two cans, curly straws to the mouth.
+function hatBeer() {
+  const g = new THREE.Group();
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.44, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2), hatMat(0xdadfe3, { rough: 0.4 }));
+  cap.position.y = 0.02; cap.scale.y = 0.85;
+  g.add(cap);
+  const canRed = hatMat(0xc0392b, { rough: 0.35 });
+  const canWhite = hatMat(0xf2f2f2, { rough: 0.4 });
+  const straw = hatMat(0xd23b2c, { rough: 0.4 });
+  for (const sx of [-1, 1]) {
+    const can = cyl(0.14, 0.14, 0.34, canRed, 16);
+    can.position.set(sx * 0.42, 0.2, 0);
+    g.add(can);
+    const label = cyl(0.142, 0.142, 0.12, canWhite, 16);
+    label.position.set(sx * 0.42, 0.2, 0);
+    g.add(label);
+    const top = cyl(0.13, 0.13, 0.03, hatMat(0xb0b6ba, { metal: 0.6, rough: 0.3 }), 16);
+    top.position.set(sx * 0.42, 0.38, 0);
+    g.add(top);
+    // curly straw: a tube from can top arcing to the front-centre (mouth)
+    const pts = [
+      new THREE.Vector3(sx * 0.42, 0.42, 0),
+      new THREE.Vector3(sx * 0.34, 0.55, 0.18),
+      new THREE.Vector3(sx * 0.12, 0.30, 0.42),
+      new THREE.Vector3(sx * 0.05, -0.05, 0.55)
+    ];
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.022, 6), straw);
+    g.add(tube);
+  }
+  return g;
+}
+
+// Fez — truncated cone with a flat top and a swinging tassel.
+function hatFez() {
+  const g = new THREE.Group();
+  const felt = hatMat(0xb02a2a, { rough: 0.7 });
+  const body = cyl(0.27, 0.34, 0.44, felt, 28);
+  body.position.y = 0.22;
+  g.add(body);
+  const top = new THREE.Mesh(new THREE.CircleGeometry(0.27, 28), felt);
+  top.rotation.x = -Math.PI / 2; top.position.y = 0.44;
+  g.add(top);
+  const button = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), hatMat(0xd4af37, { metal: 0.4, rough: 0.4 }));
+  button.position.y = 0.45; g.add(button);
+  const gold = hatMat(0xe6c84b, { metal: 0.3, rough: 0.4 });
+  const cord = cyl(0.012, 0.012, 0.34, gold, 6);
+  cord.position.set(0.16, 0.30, 0.06); cord.rotation.z = 0.5;
+  g.add(cord);
+  const tassel = cyl(0.05, 0.02, 0.12, gold, 8);
+  tassel.position.set(0.3, 0.16, 0.1);
+  g.add(tassel);
+  return g;
+}
+
+// Top hat — tall cylinder, curved brim, ribbon band.
+function hatTop() {
+  const g = new THREE.Group();
+  const blk = hatMat(0x141414, { rough: 0.35 });
+  const brim = cyl(0.62, 0.62, 0.04, blk, 36);
+  brim.scale.z = 0.9; brim.position.y = 0.02;
+  g.add(brim);
+  const body = cyl(0.42, 0.40, 0.66, blk, 32);
+  body.position.y = 0.37; body.scale.z = 0.92;
+  g.add(body);
+  const topc = new THREE.Mesh(new THREE.CircleGeometry(0.42, 32), blk);
+  topc.rotation.x = -Math.PI / 2; topc.position.y = 0.70; topc.scale.z = 0.92;
+  g.add(topc);
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.41, 0.05, 8, 32), hatMat(0x7a1f1f, { rough: 0.5 }));
+  band.rotation.x = Math.PI / 2; band.position.y = 0.12; band.scale.z = 0.92;
+  g.add(band);
+  return g;
+}
+
+// Party hat — striped cone with a pom-pom.
+function hatParty() {
+  const g = new THREE.Group();
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const cx = cv.getContext('2d');
+  const cols = ['#ff4d8d', '#ffd23f', '#3fc1ff', '#7be06b'];
+  for (let i = 0; i < 16; i++) { cx.fillStyle = cols[i % cols.length]; cx.fillRect(i * 4, 0, 4, 64); }
+  const tex = new THREE.CanvasTexture(cv);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.72, 24),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 }));
+  cone.position.y = 0.36; g.add(cone);
+  const pom = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), hatMat(0xfff3a0, { rough: 0.9 }));
+  pom.position.y = 0.74; g.add(pom);
+  return g;
+}
+
+// Captain's cap — white crown, peaked black visor, gold band + emblem.
+function hatCaptain() {
+  const g = new THREE.Group();
+  const white = hatMat(0xf3f4f6, { rough: 0.5 });
+  const band = cyl(0.42, 0.42, 0.16, white, 28);
+  band.position.y = 0.08; band.scale.z = 0.95; g.add(band);
+  const crown = cyl(0.47, 0.42, 0.12, white, 28);
+  crown.position.y = 0.2; crown.scale.z = 0.95; g.add(crown);
+  const topc = new THREE.Mesh(new THREE.CircleGeometry(0.47, 28), white);
+  topc.rotation.x = -Math.PI / 2; topc.position.y = 0.26; topc.scale.z = 0.95; g.add(topc);
+  const gold = hatMat(0xd4af37, { metal: 0.5, rough: 0.35 });
+  const gband = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.022, 8, 30), gold);
+  gband.rotation.x = Math.PI / 2; gband.position.y = 0.02; gband.scale.z = 0.95; g.add(gband);
+  const visor = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.03, 28, 1, false, -Math.PI * 0.28, Math.PI * 0.56), hatMat(0x111417, { rough: 0.4 }));
+  visor.position.set(0, 0.0, 0.34); visor.scale.set(1.05, 1, 1.5); g.add(visor);
+  const emblem = new THREE.Mesh(new THREE.CircleGeometry(0.06, 16), gold);
+  emblem.position.set(0, 0.12, 0.41); g.add(emblem);
+  return g;
+}
+
+// Crown — gold band with points and gems.
+function hatCrown() {
+  const g = new THREE.Group();
+  const gold = hatMat(0xe8c14a, { metal: 0.7, rough: 0.25 });
+  const band = cyl(0.42, 0.42, 0.2, gold, 28);
+  band.position.y = 0.1; g.add(band);
+  const gemCols = [0xff3b5c, 0x3b7bff, 0x46e06b, 0xffd23f];
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const pt = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.2, 8), gold);
+    pt.position.set(Math.cos(a) * 0.42, 0.3, Math.sin(a) * 0.42);
+    g.add(pt);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), hatMat(gemCols[i % 4], { metal: 0.3, rough: 0.2 }));
+    tip.position.set(Math.cos(a) * 0.42, 0.42, Math.sin(a) * 0.42);
+    g.add(tip);
+    const gem = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), hatMat(gemCols[i % 4], { metal: 0.3, rough: 0.2 }));
+    gem.position.set(Math.cos(a) * 0.42, 0.12, Math.sin(a) * 0.42);
+    gem.scale.set(1, 1, 0.5); g.add(gem);
+  }
+  return g;
+}
+
+// Sombrero — huge upturned brim and tall crown with a colourful band.
+function hatSombrero() {
+  const g = new THREE.Group();
+  const straw = hatMat(0xd9b066, { rough: 0.85 });
+  const brim = new THREE.Mesh(new THREE.LatheGeometry([
+    new THREE.Vector2(0.34, 0.04), new THREE.Vector2(0.7, -0.02),
+    new THREE.Vector2(1.05, 0.02), new THREE.Vector2(1.18, 0.16)
+  ], 36), straw);
+  g.add(brim);
+  const crown = cyl(0.3, 0.36, 0.5, straw, 28);
+  crown.position.y = 0.3; g.add(crown);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), straw);
+  dome.position.y = 0.55; g.add(dome);
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.05, 8, 28), hatMat(0xb5402f, { rough: 0.6 }));
+  band.rotation.x = Math.PI / 2; band.position.y = 0.12; g.add(band);
+  return g;
+}
+
+// Propeller beanie — striped cap, button and a spinning propeller.
+function hatPropeller() {
+  const g = new THREE.Group();
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.4, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2), hatMat(0x2f7d9a, { rough: 0.6 }));
+  cap.position.y = 0.0; cap.scale.y = 0.95; g.add(cap);
+  for (let i = 0; i < 4; i++) {
+    const stripe = new THREE.Mesh(new THREE.SphereGeometry(0.405, 20, 14, i * Math.PI / 2, Math.PI / 4, 0, Math.PI / 2),
+      hatMat(i % 2 ? 0xe8554d : 0xf2c14e, { rough: 0.6 }));
+    stripe.scale.y = 0.95; g.add(stripe);
+  }
+  const stalk = cyl(0.025, 0.025, 0.16, hatMat(0x9aa0a6, { metal: 0.4 }), 8);
+  stalk.position.y = 0.42; g.add(stalk);
+  const prop = new THREE.Group();
+  for (const r of [0, Math.PI]) {
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.015, 0.07), hatMat(0xff5d5d, { rough: 0.5 }));
+    blade.position.set(Math.cos(r) * 0.17, 0, Math.sin(r) * 0.17);
+    blade.rotation.y = r; blade.rotation.z = 0.25;
+    prop.add(blade);
+  }
+  prop.position.y = 0.5; prop.userData.spin = true;
+  g.add(prop);
+  g.userData.propeller = prop;
+  return g;
+}
+
+const HATS = [
+  { id: 'none', name: 'No Hat', icon: '🚫', build: null },
+  { id: 'cowboy', name: 'Cowboy', icon: '🤠', build: hatCowboy },
+  { id: 'beer', name: 'Beer Hat', icon: '🍺', build: hatBeer },
+  { id: 'fez', name: 'Fez', icon: '🎩', build: hatFez },
+  { id: 'top', name: 'Top Hat', icon: '🎩', build: hatTop },
+  { id: 'party', name: 'Party', icon: '🥳', build: hatParty },
+  { id: 'captain', name: "Captain's Cap", icon: '⚓', build: hatCaptain },
+  { id: 'crown', name: 'Crown', icon: '👑', build: hatCrown },
+  { id: 'sombrero', name: 'Sombrero', icon: '🌵', build: hatSombrero },
+  { id: 'propeller', name: 'Propeller', icon: '🛩️', build: hatPropeller },
+];
+const hatMeshes = {};
+for (const h of HATS) {
+  if (!h.build) continue;
+  const m = h.build();
+  m.visible = false;
+  hatAnchor.add(m);
+  hatMeshes[h.id] = m;
+}
+let currentHat = 'none';
+function setHat(id) {
+  currentHat = id;
+  for (const key in hatMeshes) hatMeshes[key].visible = (key === id);
+}
+
 turtle.rotation.y = Math.PI; // face into the screen (-z)
+
+// ---------- Wardrobe turntable ----------
+const turntable = new THREE.Group();
+turntable.position.set(0, -0.15, 0.2);
+const platform = new THREE.Mesh(
+  new THREE.CylinderGeometry(2.5, 2.7, 0.3, 48),
+  new THREE.MeshStandardMaterial({ color: 0x0d2b3e, roughness: 0.4, metalness: 0.3 })
+);
+turntable.add(platform);
+const ring = new THREE.Mesh(
+  new THREE.TorusGeometry(2.5, 0.06, 10, 60),
+  new THREE.MeshStandardMaterial({ color: 0x6fe8ff, emissive: 0x2bb8e0, emissiveIntensity: 1.4, roughness: 0.4 })
+);
+ring.rotation.x = Math.PI / 2; ring.position.y = 0.16;
+turntable.add(ring);
+turntable.visible = false;
+scene.add(turntable);
+
+// ---------- Camera poses (wardrobe vs play) ----------
+const CAM_PLAY = { pos: new THREE.Vector3(0, 1.6, 7.5), look: new THREE.Vector3(0, 0.2, -4) };
+const CAM_WARDROBE = { pos: new THREE.Vector3(1.7, 1.5, 6.1), look: new THREE.Vector3(-0.7, 0.55, 0.4) };
+const camLook = CAM_PLAY.look.clone();
+let mode = 'wardrobe';   // 'wardrobe' | 'play'
 
 // ---------- Plastic bags ----------
 const bagMat = new THREE.MeshStandardMaterial({
@@ -639,16 +925,33 @@ const playBtn = document.getElementById('play');
 const wiggleText = document.getElementById('wiggle-text');
 let wiggleShown = false;
 
+const wardrobe = document.getElementById('wardrobe');
+
+function enterWardrobe() {
+  mode = 'wardrobe';
+  running = false;
+  bags.forEach((b) => (b.visible = false));
+  jellies.forEach((j) => (j.visible = false));
+  target.x = 0; target.y = 0;
+  panel.classList.add('hidden');
+  hud.style.display = 'none';
+  wardrobe.classList.remove('hidden');
+}
+
 function startGame() {
+  mode = 'play';
   score = 0; dodged = 0; jelliesEaten = 0; speed = 11;
   target.x = 0; target.y = 0;
   turtle.position.set(0, 0, 0);
-  bags.forEach((b) => placeBag(b, true));
-  jellies.forEach((j) => placeJelly(j, true));
+  turtle.rotation.set(0, Math.PI, 0);
+  turtle.scale.setScalar(1);
+  bags.forEach((b) => { b.visible = true; placeBag(b, true); });
+  jellies.forEach((j) => { j.visible = true; placeJelly(j, true); });
   graceUntil = clock.elapsedTime + GRACE;
   scoreEl.textContent = '0';
   dodgedEl.textContent = '0';
   jelliesEl.textContent = '0';
+  wardrobe.classList.add('hidden');
   panel.classList.add('hidden');
   hud.style.display = 'flex';
   running = true;
@@ -663,6 +966,22 @@ function gameOver() {
 }
 
 playBtn.addEventListener('click', startGame);
+document.getElementById('play-again').addEventListener('click', startGame);
+document.getElementById('change-hat').addEventListener('click', enterWardrobe);
+
+// ---------- Build the hat rack UI ----------
+const rack = document.getElementById('hat-rack');
+HATS.forEach((h) => {
+  const btn = document.createElement('button');
+  btn.className = 'hat-btn' + (h.id === 'none' ? ' selected' : '');
+  btn.dataset.id = h.id;
+  btn.innerHTML = `<span class="hat-ico">${h.icon}</span><span class="hat-name">${h.name}</span>`;
+  btn.addEventListener('click', () => {
+    setHat(h.id);
+    rack.querySelectorAll('.hat-btn').forEach((b) => b.classList.toggle('selected', b === btn));
+  });
+  rack.appendChild(btn);
+});
 
 // ---------- Loop ----------
 const clock = new THREE.Clock();
@@ -681,6 +1000,38 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
+
+  // smooth camera move between wardrobe and play poses
+  const inWardrobe = mode === 'wardrobe';
+  const pose = inWardrobe ? CAM_WARDROBE : CAM_PLAY;
+  camera.position.lerp(pose.pos, Math.min(1, 3 * dt));
+  camLook.lerp(pose.look, Math.min(1, 3 * dt));
+  camera.lookAt(camLook);
+  turntable.visible = inWardrobe;
+  studio.intensity += ((inWardrobe ? 1.3 : 0) - studio.intensity) * Math.min(1, 4 * dt);
+  turntable.rotation.y = t * 0.4;
+
+  // spin the propeller beanie if it is the chosen hat
+  const propHat = hatMeshes['propeller'];
+  if (propHat && propHat.visible && propHat.userData.propeller) {
+    propHat.userData.propeller.rotation.y += dt * 14;
+  }
+
+  if (inWardrobe) {
+    // pose Friday on the turntable: slow spin + gentle hover, neutral shape
+    turtle.position.set(0, 0.45 + Math.sin(t * 1.2) * 0.06, 0.2);
+    turtle.rotation.set(0, t * 0.5, 0);
+    turtle.scale.setScalar(1);
+    tail.rotation.x = TAIL_BASE_X; tail.position.set(0, -0.12, -2.12);
+    beak.position.y = -0.18;
+    shield.visible = false;
+    flippers.forEach((f, i) => {        // gentle idle flipper sway
+      f.pivot.rotation.z = Math.sin(t * 2 + (i % 2) * Math.PI) * 0.25 * (f.x < 0 ? 1 : -1);
+    });
+    renderAmbient(dt, t, 6);
+    renderer.render(scene, camera);
+    return;
+  }
 
   // keyboard steering (gentler)
   const kspeed = 6 * dt;
@@ -815,10 +1166,12 @@ function animate() {
     }
   }
 
-  // current speed used for ambient scrolling (gentle drift on menu, game speed in play)
-  const flow = running ? speed : 6;
+  renderAmbient(dt, t, running ? speed : 6);
+  renderer.render(scene, camera);
+}
 
-  // seagrass scrolls with the current and sways
+// Seagrass sway, drifting sharks and bubbles — shared by both modes.
+function renderAmbient(dt, t, flow) {
   for (const cl of grassClusters) {
     cl.position.z += flow * dt;
     if (cl.position.z > 14) placeGrass(cl, false);
@@ -827,22 +1180,20 @@ function animate() {
     }
   }
 
-  // occasionally send a shark cruising across the background
   if (t > nextSharkAt) {
     const idle = sharks.filter((s) => !s.userData.active);
     if (idle.length) launchShark(idle[Math.floor(Math.random() * idle.length)]);
-    nextSharkAt = t + 3.5 + Math.random() * 6;   // next one in a few seconds
+    nextSharkAt = t + 3.5 + Math.random() * 6;
   }
   for (const shark of sharks) {
     if (!shark.userData.active) continue;
     shark.position.x += shark.userData.dir * shark.userData.speed * dt;
     shark.position.y += Math.sin(t * 1.2 + shark.userData.bob) * 0.005;
-    shark.userData.tail.rotation.y = Math.sin(t * 5 + shark.userData.phase) * 0.5;   // swimming wag
-    shark.rotation.z = Math.sin(t * 2.5 + shark.userData.phase) * 0.06;              // gentle roll
+    shark.userData.tail.rotation.y = Math.sin(t * 5 + shark.userData.phase) * 0.5;
+    shark.rotation.z = Math.sin(t * 2.5 + shark.userData.phase) * 0.06;
     if (Math.abs(shark.position.x) > 34) { shark.userData.active = false; shark.visible = false; }
   }
 
-  // bubbles drift toward camera
   const bp = bubbleGeo.attributes.position;
   for (let i = 0; i < BUB; i++) {
     let z = bp.getZ(i) + flow * dt;
@@ -852,10 +1203,9 @@ function animate() {
     bp.setZ(i, z); bp.setY(i, y);
   }
   bp.needsUpdate = true;
-
-  renderer.render(scene, camera);
 }
 
 // hide loading once first frame is ready
 document.getElementById('loading').style.display = 'none';
+enterWardrobe();   // start on the wardrobe screen
 animate();
