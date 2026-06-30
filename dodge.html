@@ -43,7 +43,57 @@
     cursor: pointer; transition: transform 0.1s, background 0.15s;
   }
   button:hover { background: #27ae60; transform: translateY(-1px); }
+  button.secondary { background: rgba(120,200,255,0.16); color: #eaf6ff; border: 1px solid rgba(120,200,255,0.4); }
+  button.secondary:hover { background: rgba(120,200,255,0.28); }
+  .btn-row { display: flex; gap: 12px; justify-content: center; }
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #cfe8ff; }
+
+  /* ---------- Wardrobe / character select ---------- */
+  #wardrobe { pointer-events: none; }
+  #wardrobe.hidden { display: none; }
+  .wardrobe-head {
+    position: absolute; top: 22px; left: 28px; max-width: 48%;
+  }
+  .wardrobe-head h1 { font-size: 1.9rem; margin-bottom: 6px; }
+  .wardrobe-head p { font-size: 0.9rem; opacity: 0.85; line-height: 1.4; }
+  .wardrobe-dock {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 340px; max-width: 80vw;
+    background: linear-gradient(180deg, rgba(3,22,38,0.62), rgba(2,14,26,0.88));
+    border-left: 1px solid rgba(120,200,255,0.25);
+    backdrop-filter: blur(6px);
+    pointer-events: auto; display: flex; flex-direction: column;
+    padding: 22px 20px 18px;
+  }
+  .dock-title {
+    font-size: 0.8rem; letter-spacing: 3px; opacity: 0.7; margin-bottom: 12px;
+    border-bottom: 1px solid rgba(120,200,255,0.2); padding-bottom: 8px;
+  }
+  .rack { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+  .rack::-webkit-scrollbar { width: 8px; }
+  .rack::-webkit-scrollbar-thumb { background: rgba(120,200,255,0.3); border-radius: 4px; }
+  .hat-btn {
+    pointer-events: auto; display: flex; align-items: center; gap: 12px;
+    background: rgba(120,200,255,0.08); color: #eaf6ff; border: 1px solid rgba(120,200,255,0.18);
+    border-radius: 12px; padding: 10px 14px; font-size: 1rem; font-weight: 600;
+    cursor: pointer; transition: background 0.12s, border-color 0.12s, transform 0.08s; text-align: left;
+  }
+  .hat-btn:hover { background: rgba(120,200,255,0.18); transform: none; }
+  .hat-btn.selected {
+    background: rgba(46,204,113,0.22); border-color: #2ecc71;
+    box-shadow: 0 0 0 1px #2ecc71 inset;
+  }
+  .hat-btn .hat-ico { font-size: 1.5rem; width: 28px; text-align: center; }
+  .hat-btn .hat-name { flex: 1; }
+  .wardrobe-dock #play { margin-top: 14px; width: 100%; }
+  .wardrobe-dock .more {
+    margin-top: 10px; text-align: center; color: #9fe8ff; text-decoration: none;
+    font-size: 0.85rem; pointer-events: auto;
+  }
+  .wardrobe-dock .more:hover { text-decoration: underline; }
+  @media (max-width: 560px) {
+    .wardrobe-head { max-width: 90%; }
+    .wardrobe-dock { width: 64vw; }
+  }
 
   /* spacebar wiggle shout */
   #wiggle-text {
@@ -94,16 +144,33 @@
     <div class="right"><div class="lbl">BAGS DODGED</div><div class="big"><span id="dodged">0</span></div></div>
   </div>
 
-  <div id="panel" class="layer">
+  <!-- Wardrobe / character-select screen -->
+  <div id="wardrobe" class="layer">
+    <div class="wardrobe-head">
+      <h1>🐢 Friday's Wardrobe</h1>
+      <p>Pick Friday a hat, then dive in. Dodge bags, eat jellies — tap <kbd>SPACE</kbd> to wiggle.</p>
+    </div>
+    <div class="wardrobe-dock">
+      <div class="dock-title">HATS</div>
+      <div id="hat-rack" class="rack"></div>
+      <button id="play">Start Swimming →</button>
+      <a class="more" href="index.html">&larr; More games</a>
+    </div>
+  </div>
+
+  <!-- Game-over panel -->
+  <div id="panel" class="layer hidden">
     <div class="card">
       <h1>🐢 Friday's Ocean Dash</h1>
       <div class="sub">National Marine Aquarium, Plymouth</div>
-      <p id="msg">You are <strong>Friday</strong>, a green sea turtle swimming the open ocean — but it's full of discarded plastic bags. Steer Friday to <strong>dodge every bag</strong>, and swim into the glowing <strong>moon jellies</strong> to gobble them up. The longer you swim, the faster it gets!</p>
+      <p id="msg"></p>
       <div class="keys">
-        Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrow keys &nbsp;·&nbsp; or move your mouse / drag on touch
+        Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows · mouse / drag &nbsp;·&nbsp; <kbd>SPACE</kbd> to wiggle
       </div>
-      <button id="play">Start Swimming</button>
-      <div style="margin-top:14px"><a href="index.html" style="color:#9fe8ff;text-decoration:none;font-size:0.85rem;pointer-events:auto">&larr; More games</a></div>
+      <div class="btn-row">
+        <button id="play-again">Swim Again</button>
+        <button id="change-hat" class="secondary">Change Hat</button>
+      </div>
     </div>
   </div>
 
