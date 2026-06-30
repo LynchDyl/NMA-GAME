@@ -163,20 +163,76 @@ function makeHeadTexture() {
   return tex;
 }
 
-// ---- Domed elliptical carapace geometry with clean top-down UVs ----
+// ---- Reptile skin scale texture (tiled), tints via material colour ----
+function makeScaleTexture() {
+  const S = 128, cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#8f8f8f'; g.fillRect(0, 0, S, S);
+  const cell = 17;
+  for (let y = -1; y * cell < S + cell; y++) {
+    for (let x = -1; x * cell < S + cell; x++) {
+      const ox = (y & 1) * cell / 2;
+      const cxp = x * cell + ox + (Math.random() - 0.5) * 4;
+      const cyp = y * cell + (Math.random() - 0.5) * 4;
+      const r = cell * 0.5 + (Math.random() - 0.5) * 3;
+      g.beginPath();
+      g.ellipse(cxp, cyp, r, r * 0.82, Math.random() * 0.6, 0, Math.PI * 2);
+      const s = 190 + Math.random() * 55;            // light scale crowns
+      g.fillStyle = `rgb(${s},${s},${s})`;
+      g.fill();
+      g.lineWidth = 1.6; g.strokeStyle = 'rgba(60,60,60,0.55)'; // dark seams
+      g.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 3);
+  tex.needsUpdate = true;
+  return tex;
+}
+const scaleTex = makeScaleTexture();
+
+// ---- Domed carapace with true scute relief + per-vertex colour ----
+// Scutes are laid out as Voronoi cells from seed points; cell interiors are
+// raised into rounded plates and seams sink into grooves, with a brown/olive
+// shade per scute (subtle, natural) — no painted texture.
 function buildCarapace(a, b, height) {
-  const RINGS = 16, SEG = 36;
-  const pos = [], uv = [], idx = [];
+  const RINGS = 30, SEG = 64;
+  const seeds = [];
+  for (let i = 0; i < 5; i++) seeds.push([0, -0.62 + i * 0.31]);                 // vertebral row
+  for (const s of [-1, 1]) for (let i = 0; i < 4; i++) seeds.push([s * 0.46, -0.5 + i * 0.34]); // costals
+  const M = 18; for (let i = 0; i < M; i++) { const an = (i + 0.5) / M * Math.PI * 2; seeds.push([Math.cos(an) * 0.84, Math.sin(an) * 0.84]); } // marginals
+  seeds.push([0, 0.95]);                                                         // nuchal
+  const shades = seeds.map((s, i) => {
+    const f = Math.abs((Math.sin(i * 91.17) * 1000) % 1);
+    return new THREE.Color().setRGB(0.34 + 0.13 * f, 0.30 + 0.11 * f, 0.17 + 0.07 * f);
+  });
+
+  const pos = [], col = [], idx = [];
+  const tmp = new THREE.Color();
   for (let i = 0; i <= RINGS; i++) {
     const t = i / RINGS;
     for (let j = 0; j <= SEG; j++) {
       const ang = (j / SEG) * Math.PI * 2, ca = Math.cos(ang), sa = Math.sin(ang);
       let x = a * t * ca, z = b * t * sa;
-      if (z < 0) x *= 1 + (z / b) * 0.16;            // taper the rear
-      let y = height * Math.cos(t * Math.PI / 2);     // domed profile
-      if (t > 0.84) y -= (t - 0.84) * height * 1.6;   // flared marginal rim dips down
+      if (z < 0) x *= 1 + (z / b) * 0.16;             // rear taper
+      const u = t * ca, v = t * sa;                    // unit-disk coords for seeds
+      let d1 = 1e9, d2 = 1e9, n1 = 0;
+      for (let s = 0; s < seeds.length; s++) {
+        const du = u - seeds[s][0], dv = v - seeds[s][1], d = du * du + dv * dv;
+        if (d < d1) { d2 = d1; d1 = d; n1 = s; } else if (d < d2) { d2 = d; }
+      }
+      d1 = Math.sqrt(d1); d2 = Math.sqrt(d2);
+      const edge = Math.max(0, Math.min(1, (d2 - d1) / 0.05)); // 0 at seam → 1 inside
+      let y = height * Math.cos(t * Math.PI / 2);
+      if (t > 0.84) y -= (t - 0.84) * height * 1.6;    // marginal rim flare
+      y += 0.06 * edge * (1 - t * 0.4);                // raised scute plates
       pos.push(x, y, z);
-      uv.push(0.5 + x / (2 * a), 0.5 + z / (2 * b));
+      tmp.copy(shades[n1]);
+      const mott = 0.9 + 0.1 * Math.sin(x * 6.3 + z * 4.7);
+      tmp.multiplyScalar((0.5 + 0.5 * edge) * mott);   // darken grooves
+      col.push(tmp.r, tmp.g, tmp.b);
     }
   }
   for (let i = 0; i < RINGS; i++)
@@ -186,7 +242,7 @@ function buildCarapace(a, b, height) {
     }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setIndex(idx);
   geo.computeVertexNormals();
   return geo;
@@ -194,12 +250,12 @@ function buildCarapace(a, b, height) {
 
 const shell = new THREE.Mesh(
   buildCarapace(1.5, 2.0, 0.62),
-  new THREE.MeshStandardMaterial({ map: makeCarapaceTexture(), roughness: 0.5, metalness: 0.0, side: THREE.DoubleSide })
+  new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.0, side: THREE.DoubleSide })
 );
 turtle.add(shell);
 
-const skinMat = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.6, metalness: 0.0, side: THREE.DoubleSide });
-const creamMat = new THREE.MeshStandardMaterial({ color: CREAM, roughness: 0.7, metalness: 0.0, side: THREE.DoubleSide });
+const skinMat = new THREE.MeshStandardMaterial({ color: SKIN, map: scaleTex, roughness: 0.6, metalness: 0.0, side: THREE.DoubleSide });
+const creamMat = new THREE.MeshStandardMaterial({ color: CREAM, map: scaleTex, roughness: 0.7, metalness: 0.0, side: THREE.DoubleSide });
 
 // pale plastron (belly) tucked just under the carapace
 const plastron = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 14), creamMat);
@@ -207,33 +263,65 @@ plastron.scale.set(1.28, 0.34, 1.78);
 plastron.position.y = -0.34;
 turtle.add(plastron);
 
-// ---- neck + head ---- (larger, blockier head pulled forward, like the photos)
-const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.5, 0.95, 12), skinMat);
+// ---- neck + head ---- (blockier loggerhead-style head with a hooked beak)
+const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.5, 0.95, 16), skinMat);
 neck.rotation.x = Math.PI / 2;
 neck.position.set(0, -0.02, 1.9);
 turtle.add(neck);
-const throat = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 10), creamMat);
-throat.scale.set(0.78, 0.55, 1.1);
-throat.position.set(0, -0.26, 2.2);
+const throat = new THREE.Mesh(new THREE.SphereGeometry(0.32, 14, 12), creamMat);
+throat.scale.set(0.8, 0.58, 1.1);
+throat.position.set(0, -0.26, 2.24);
 turtle.add(throat);
 
-const headMat = new THREE.MeshStandardMaterial({ map: makeHeadTexture(), roughness: 0.6, metalness: 0.0 });
-const head = new THREE.Mesh(new THREE.SphereGeometry(0.52, 18, 16), headMat);
-head.scale.set(0.92, 0.88, 1.22);
-head.position.set(0, 0.04, 2.6);
+const headMat = new THREE.MeshStandardMaterial({ map: makeHeadTexture(), roughness: 0.55, metalness: 0.0 });
+const hornMat = new THREE.MeshStandardMaterial({ color: 0xcdbb86, roughness: 0.45, metalness: 0.0 });
+
+// main head — elongated, slightly flattened crown
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.52, 22, 18), headMat);
+head.scale.set(0.9, 0.82, 1.34);
+head.position.set(0, 0.04, 2.62);
 turtle.add(head);
-// pale pointed beak
-const beak = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 12), creamMat);
-beak.scale.set(0.66, 0.54, 0.9);
-beak.position.set(0, -0.18, 3.0);
-turtle.add(beak);
-const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.25 });
+// blocky cheeks for a chunky loggerhead jaw
 for (const sx of [-1, 1]) {
-  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), eyeMat);
-  eye.position.set(0.34 * sx, 0.11, 2.78);
+  const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 12), headMat);
+  cheek.scale.set(0.7, 0.7, 0.95);
+  cheek.position.set(0.28 * sx, -0.06, 2.78);
+  turtle.add(cheek);
+}
+// brow ridges (hooded look over the eyes)
+for (const sx of [-1, 1]) {
+  const brow = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), headMat);
+  brow.scale.set(1.0, 0.45, 0.7);
+  brow.position.set(0.3 * sx, 0.26, 2.82);
+  turtle.add(brow);
+}
+// upper jaw — hooked keratin beak
+const upperBeak = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.46, 14), hornMat);
+upperBeak.rotation.x = Math.PI / 2 + 0.55;
+upperBeak.scale.set(1, 0.72, 1);
+upperBeak.position.set(0, 0.0, 3.16);
+turtle.add(upperBeak);
+// lower jaw (cream) — this is what animates during the chomp
+const beak = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 14), creamMat);
+beak.scale.set(0.64, 0.5, 0.92);
+beak.position.set(0, -0.18, 3.02);
+turtle.add(beak);
+
+const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0x1a1408, roughness: 0.5 });
+const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.15, metalness: 0.1 });
+for (const sx of [-1, 1]) {
+  const socket = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 10), eyeWhiteMat);
+  socket.scale.set(1, 1, 0.7);
+  socket.position.set(0.35 * sx, 0.13, 2.92);
+  turtle.add(socket);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.085, 14, 12), eyeMat);
+  eye.position.set(0.37 * sx, 0.14, 3.0);
   turtle.add(eye);
-  const nostril = new THREE.Mesh(new THREE.SphereGeometry(0.024, 6, 6), eyeMat);
-  nostril.position.set(0.08 * sx, -0.06, 3.24);
+  const glint = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  glint.position.set(0.4 * sx, 0.18, 3.05);
+  turtle.add(glint);
+  const nostril = new THREE.Mesh(new THREE.SphereGeometry(0.026, 6, 6), eyeMat);
+  nostril.position.set(0.08 * sx, 0.02, 3.42);
   turtle.add(nostril);
 }
 
@@ -528,6 +616,74 @@ function hatPropeller() {
   return g;
 }
 
+// Pirate tricorn — three upturned black flaps round a low crown, skull badge.
+function hatPirate() {
+  const g = new THREE.Group();
+  const blk = hatMat(0x1c1c20, { rough: 0.6 });
+  const crown = cyl(0.34, 0.38, 0.26, blk, 24);
+  crown.position.y = 0.16; g.add(crown);
+  const top = new THREE.Mesh(new THREE.SphereGeometry(0.37, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), blk);
+  top.position.y = 0.26; top.scale.y = 0.5; g.add(top);
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + Math.PI / 2;
+    const flap = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.05, 20, 1, false, -0.6, 1.2), blk);
+    flap.position.set(Math.cos(a) * 0.34, 0.16, Math.sin(a) * 0.34);
+    flap.rotation.y = -a; flap.rotation.x = -0.55; flap.scale.set(1, 1, 1.6);
+    g.add(flap);
+  }
+  const trim = hatMat(0xd9c25a, { metal: 0.3, rough: 0.5 });
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), hatMat(0xf3f0e6, { rough: 0.6 }));
+  skull.position.set(0, 0.18, 0.4); skull.scale.set(1, 1.1, 0.7); g.add(skull);
+  for (const sx of [-1, 1]) {
+    const socket = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), hatMat(0x111));
+    socket.position.set(0.035 * sx, 0.19, 0.47); g.add(socket);
+  }
+  for (const rot of [0.6, -0.6]) {          // crossbones
+    const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.18, 6), hatMat(0xf3f0e6, { rough: 0.6 }));
+    bone.position.set(0, 0.08, 0.42); bone.rotation.z = Math.PI / 2 + rot; g.add(bone);
+  }
+  const feather = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.5, 8), hatMat(0xb5402f, { rough: 0.7 }));
+  feather.position.set(0.22, 0.5, -0.1); feather.rotation.z = -0.5; feather.scale.set(1, 1, 0.3); g.add(feather);
+  return g;
+}
+
+// Snorkel & dive mask — lens over the eyes (offset down/forward) + snorkel tube.
+function hatSnorkel() {
+  const g = new THREE.Group();
+  const strap = hatMat(0x16161a, { rough: 0.7 });
+  const frame = hatMat(0x1f6f8c, { rough: 0.4 });
+  const lens = new THREE.MeshStandardMaterial({ color: 0x9fe4ff, transparent: true, opacity: 0.45, roughness: 0.1, metalness: 0.2, side: THREE.DoubleSide });
+  // mask body sits over the eyes
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.36, 0.18), frame);
+  body.position.set(0, -0.2, 0.34); body.scale.set(1, 1, 1);
+  // round the front a touch
+  g.add(body);
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.26, 0.08), lens);
+  glass.position.set(0, -0.2, 0.45); g.add(glass);
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.04, 8, 28), strap);
+  band.position.set(0, -0.16, 0.05); band.rotation.y = Math.PI / 2; band.scale.set(1, 0.7, 1); g.add(band);
+  // snorkel: vertical tube on the left with a curved mouthpiece
+  const tube = cyl(0.05, 0.05, 0.7, frame, 12);
+  tube.position.set(-0.5, 0.05, 0.3); g.add(tube);
+  const topBend = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.05, 8, 12, Math.PI), frame);
+  topBend.position.set(-0.44, 0.4, 0.3); topBend.rotation.z = Math.PI; g.add(topBend);
+  const mouth = cyl(0.045, 0.045, 0.18, strap, 10);
+  mouth.position.set(-0.42, -0.28, 0.34); mouth.rotation.x = 0.4; g.add(mouth);
+  return g;
+}
+
+// Halo — glowing gold ring that floats above the head.
+function hatHalo() {
+  const g = new THREE.Group();
+  const ringMat = new THREE.MeshStandardMaterial({ color: 0xffe27a, emissive: 0xffcf3a, emissiveIntensity: 1.6, roughness: 0.3, metalness: 0.6 });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.05, 12, 36), ringMat);
+  ring.rotation.x = Math.PI / 2.2;
+  ring.position.y = 0.5;
+  g.add(ring);
+  g.userData.halo = ring;
+  return g;
+}
+
 const HATS = [
   { id: 'none', name: 'No Hat', icon: '🚫', build: null },
   { id: 'cowboy', name: 'Cowboy', icon: '🤠', build: hatCowboy },
@@ -539,6 +695,9 @@ const HATS = [
   { id: 'crown', name: 'Crown', icon: '👑', build: hatCrown },
   { id: 'sombrero', name: 'Sombrero', icon: '🌵', build: hatSombrero },
   { id: 'propeller', name: 'Propeller', icon: '🛩️', build: hatPropeller },
+  { id: 'pirate', name: 'Pirate Tricorn', icon: '🏴‍☠️', build: hatPirate },
+  { id: 'snorkel', name: 'Snorkel Mask', icon: '🤿', build: hatSnorkel },
+  { id: 'halo', name: 'Halo', icon: '😇', build: hatHalo },
 ];
 const hatMeshes = {};
 for (const h of HATS) {
@@ -1011,10 +1170,15 @@ function animate() {
   studio.intensity += ((inWardrobe ? 1.3 : 0) - studio.intensity) * Math.min(1, 4 * dt);
   turntable.rotation.y = t * 0.4;
 
-  // spin the propeller beanie if it is the chosen hat
+  // spin the propeller beanie / float the halo if chosen
   const propHat = hatMeshes['propeller'];
   if (propHat && propHat.visible && propHat.userData.propeller) {
     propHat.userData.propeller.rotation.y += dt * 14;
+  }
+  const haloHat = hatMeshes['halo'];
+  if (haloHat && haloHat.visible && haloHat.userData.halo) {
+    haloHat.userData.halo.position.y = 0.5 + Math.sin(t * 2) * 0.05;
+    haloHat.userData.halo.rotation.z += dt * 0.5;
   }
 
   if (inWardrobe) {
