@@ -41,57 +41,116 @@ scene.add(floor);
 const turtle = new THREE.Group();
 scene.add(turtle);
 
-const shellMat = new THREE.MeshStandardMaterial({ color: 0x2f7d4f, roughness: 0.6, flatShading: true });
-const shell = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), shellMat);
-shell.scale.set(1.35, 0.55, 1.7);
+// Realistic green sea turtle palette: olive/brown mottled carapace,
+// pale cream plastron and limb undersides, spotted olive head.
+const CARAPACE = 0x7d8a4a;   // olive-green shell
+const CARAPACE_DK = 0x555e2e; // darker mottled patches
+const CARAPACE_BR = 0x8a6f3a; // brownish streaks
+const CREAM = 0xe8e2c4;       // pale plastron / underside
+const SKIN = 0x9aa05c;        // olive limb/head skin
+const SPOT = 0x3a3320;        // dark head spots
+
+const shellMat = new THREE.MeshStandardMaterial({ color: CARAPACE, roughness: 0.65, flatShading: true });
+// elongated tear-drop carapace (wider at front shoulders, tapering to rear)
+const shell = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), shellMat);
+shell.scale.set(1.45, 0.5, 1.95);
+const sp = shell.geometry.attributes.position;
+for (let i = 0; i < sp.count; i++) {
+  const z = sp.getZ(i);
+  if (z < 0) { sp.setX(i, sp.getX(i) * (1 + z * 0.18)); } // taper the tail end
+}
+shell.geometry.computeVertexNormals();
 turtle.add(shell);
 
-// shell scute pattern (darker hexish bumps)
-const scuteMat = new THREE.MeshStandardMaterial({ color: 0x1f5d39, roughness: 0.7, flatShading: true });
-for (let i = 0; i < 7; i++) {
-  const s = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.12, 6), scuteMat);
-  const ang = (i / 7) * Math.PI * 2;
-  const rr = i === 0 ? 0 : 0.75;
-  s.position.set(Math.cos(ang) * rr * 1.1, 0.55, Math.sin(ang) * rr * 1.3);
-  turtle.add(s);
+// pale plastron (belly) slightly below
+const plastron = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12),
+  new THREE.MeshStandardMaterial({ color: CREAM, roughness: 0.8, flatShading: true }));
+plastron.scale.set(1.2, 0.32, 1.7);
+plastron.position.y = -0.28;
+turtle.add(plastron);
+
+// mottled scute patches scattered over the carapace (varied olive/brown shades)
+const scuteShades = [CARAPACE_DK, CARAPACE_BR, CARAPACE_DK, 0x6b7438];
+for (let i = 0; i < 16; i++) {
+  const mat = new THREE.MeshStandardMaterial({ color: scuteShades[i % scuteShades.length], roughness: 0.75, flatShading: true });
+  const patch = new THREE.Mesh(new THREE.CylinderGeometry(0.18 + Math.random() * 0.14, 0.16, 0.06, 6), mat);
+  // distribute across the top dome of the shell
+  const u = (Math.random() - 0.5) * 1.9;   // across width
+  const v = (Math.random() - 0.5) * 2.9;   // along length
+  const yTop = 0.48 * Math.sqrt(Math.max(0, 1 - (u / 1.45) ** 2 - (v / 1.95) ** 2));
+  patch.position.set(u, yTop + 0.02, v);
+  patch.rotation.y = Math.random() * Math.PI;
+  turtle.add(patch);
 }
 
-const skinMat = new THREE.MeshStandardMaterial({ color: 0x4caf6e, roughness: 0.7, flatShading: true });
+const skinMat = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.7, flatShading: true });
+const creamMat = new THREE.MeshStandardMaterial({ color: CREAM, roughness: 0.8, flatShading: true });
 
-// head
-const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 10), skinMat);
-head.scale.set(0.9, 0.8, 1.1);
-head.position.set(0, 0.1, 1.9);
+// neck + head
+const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.42, 0.7, 10), skinMat);
+neck.rotation.x = Math.PI / 2;
+neck.position.set(0, -0.02, 1.75);
+turtle.add(neck);
+
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 14, 12), skinMat);
+head.scale.set(0.85, 0.78, 1.15);
+head.position.set(0, 0.02, 2.25);
 turtle.add(head);
-const eyeMat = new THREE.MeshStandardMaterial({ color: 0x101010 });
+// pale beak / lower jaw
+const beak = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), creamMat);
+beak.scale.set(0.7, 0.55, 0.8);
+beak.position.set(0, -0.13, 2.55);
+turtle.add(beak);
+// dark spots speckled over the head scales
+for (let i = 0; i < 14; i++) {
+  const spot = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6),
+    new THREE.MeshStandardMaterial({ color: SPOT, roughness: 0.6 }));
+  const a = Math.random() * Math.PI * 2, r = 0.3 + Math.random() * 0.12;
+  spot.position.set(Math.cos(a) * r * 0.8, 0.05 + Math.sin(a) * r * 0.7, 2.25 + (Math.random() - 0.2) * 0.35);
+  spot.scale.z = 0.4;
+  turtle.add(spot);
+}
+const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a });
 for (const sx of [-1, 1]) {
-  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), eyeMat);
-  eye.position.set(0.22 * sx, 0.2, 2.15);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), eyeMat);
+  eye.position.set(0.27 * sx, 0.08, 2.4);
   turtle.add(eye);
 }
 
-// flippers (animated)
+// flippers — large paddle-shaped front pair, smaller rear pair.
+// Built as a 2-segment pivot so they sweep like real flippers.
 const flippers = [];
 function makeFlipper(x, z, front) {
-  const f = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 8), skinMat);
-  f.scale.set(front ? 1.2 : 0.9, 0.18, 0.6);
-  f.position.set(x, -0.05, z);
   const pivot = new THREE.Group();
   pivot.position.set(x, -0.05, z);
-  f.position.set(0, 0, 0);
-  pivot.add(f);
+
+  const len = front ? 2.0 : 1.0;
+  const wide = front ? 0.85 : 0.6;
+  const paddle = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 8), skinMat);
+  paddle.scale.set(wide, 0.14, len);
+  // sweep the paddle outward and back from the shoulder
+  paddle.position.set(x * 0.5 * wide, 0, front ? len * 0.42 : -len * 0.42);
+  pivot.add(paddle);
+
+  // pale underside trailing edge
+  const under = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 6), creamMat);
+  under.scale.set(wide * 0.7, 0.1, len * 0.8);
+  under.position.copy(paddle.position);
+  under.position.y -= 0.08;
+  pivot.add(under);
+
   turtle.add(pivot);
   flippers.push({ pivot, x, front });
 }
-makeFlipper(-1.3, 0.6, true);
-makeFlipper(1.3, 0.6, true);
-makeFlipper(-1.15, -0.9, false);
-makeFlipper(1.15, -0.9, false);
+makeFlipper(-1.25, 0.7, true);
+makeFlipper(1.25, 0.7, true);
+makeFlipper(-1.05, -1.15, false);
+makeFlipper(1.05, -1.15, false);
 
-// tail
-const tail = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.7, 8), skinMat);
+// short pointed tail
+const tail = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.6, 8), skinMat);
 tail.rotation.x = -Math.PI / 2;
-tail.position.set(0, 0, -1.9);
+tail.position.set(0, -0.1, -2.0);
 turtle.add(tail);
 
 turtle.rotation.y = Math.PI; // face into the screen (-z)
