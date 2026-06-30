@@ -768,25 +768,29 @@ function makeBag() {
   return g;
 }
 
-const BAG_COUNT = 12;
-const bags = [];
-const SPAWN_Z = -70;
-const xRange = 5.2, yRange = 3.0;
+// ---------- Open-world bounds ----------
+const WORLD_R = 60;                          // horizontal radius of the open ocean
+const Y_MIN = FLOOR_Y + 1.6, Y_MAX = 13;     // swimmable depth band
+function randWorldPos(out) {
+  const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * WORLD_R;
+  out.set(Math.cos(a) * r, Y_MIN + Math.random() * (Y_MAX - Y_MIN), Math.sin(a) * r);
+  return out;
+}
 
-function placeBag(bag, initial) {
-  bag.position.x = (Math.random() - 0.5) * 2 * xRange;
-  bag.position.y = (Math.random() - 0.5) * 2 * yRange;
-  bag.position.z = initial ? -26 - Math.random() * 60 : SPAWN_Z - Math.random() * 30;
-  bag.userData.spin = (Math.random() - 0.5) * 1.2;
+const BAG_COUNT = 24;
+const bags = [];
+function placeBag(bag, awayFrom) {
+  randWorldPos(bag.position);
+  if (awayFrom) { let n = 0; while (bag.position.distanceTo(awayFrom) < 16 && n++ < 8) randWorldPos(bag.position); }
+  bag.userData.spin = (Math.random() - 0.5) * 0.8;
   bag.userData.bob = Math.random() * Math.PI * 2;
-  bag.userData.scored = false;
+  bag.userData.bobBase = bag.position.y;
   const s = 0.7 + Math.random() * 0.7;
   bag.scale.set(s, s, s);
 }
-
 for (let i = 0; i < BAG_COUNT; i++) {
   const b = makeBag();
-  placeBag(b, true);
+  placeBag(b);
   bags.push(b);
   scene.add(b);
 }
@@ -831,23 +835,23 @@ function makeJelly() {
   return g;
 }
 
-const JELLY_COUNT = 5;
+const JELLY_COUNT = 12;
 const jellies = [];
-function placeJelly(j, initial) {
-  j.position.x = (Math.random() - 0.5) * 2 * xRange;
-  j.position.y = (Math.random() - 0.5) * 2 * yRange;
-  j.position.z = initial ? -34 - Math.random() * 46 : SPAWN_Z - Math.random() * 30;
+function placeJelly(j, awayFrom) {
+  randWorldPos(j.position);
+  if (awayFrom) { let n = 0; while (j.position.distanceTo(awayFrom) < 12 && n++ < 8) randWorldPos(j.position); }
   j.userData.popping = false;
   j.userData.bellMat.opacity = 0.45;
   j.userData.gonMat.opacity = 0.6;
   j.userData.phase = Math.random() * Math.PI * 2;
-  j.userData.baseScale = 0.75 + Math.random() * 0.6;
+  j.userData.baseScale = 0.8 + Math.random() * 0.7;
+  j.userData.baseY = j.position.y;
   j.scale.setScalar(j.userData.baseScale);
   j.visible = true;
 }
 for (let i = 0; i < JELLY_COUNT; i++) {
   const j = makeJelly();
-  placeJelly(j, true);
+  placeJelly(j);
   jellies.push(j);
   scene.add(j);
 }
@@ -857,9 +861,10 @@ const bubbleGeo = new THREE.BufferGeometry();
 const BUB = 220;
 const bpos = new Float32Array(BUB * 3);
 for (let i = 0; i < BUB; i++) {
-  bpos[i * 3] = (Math.random() - 0.5) * 50;
-  bpos[i * 3 + 1] = (Math.random() - 0.5) * 24;
-  bpos[i * 3 + 2] = -Math.random() * 80;
+  const a = Math.random() * Math.PI * 2, r = Math.random() * WORLD_R;
+  bpos[i * 3] = Math.cos(a) * r;
+  bpos[i * 3 + 1] = Y_MIN + Math.random() * (Y_MAX - Y_MIN + 4);
+  bpos[i * 3 + 2] = Math.sin(a) * r;
 }
 bubbleGeo.setAttribute('position', new THREE.BufferAttribute(bpos, 3));
 const bubbles = new THREE.Points(bubbleGeo, new THREE.PointsMaterial({ color: 0xcdeeff, size: 0.12, transparent: true, opacity: 0.5 }));
@@ -894,16 +899,16 @@ function makeGrassCluster() {
   return cluster;
 }
 
-const GRASS_N = 16;
+const GRASS_N = 54;
 const grassClusters = [];
-function placeGrass(cl, initial) {
-  cl.position.set((Math.random() - 0.5) * 36, FLOOR_Y, initial ? -8 - Math.random() * 70 : -78 - Math.random() * 18);
-  const s = 0.7 + Math.random() * 0.8;
-  cl.scale.setScalar(s);
+function placeGrass(cl) {
+  const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * WORLD_R;
+  cl.position.set(Math.cos(a) * r, FLOOR_Y, Math.sin(a) * r);
+  cl.scale.setScalar(0.7 + Math.random() * 0.9);
 }
 for (let i = 0; i < GRASS_N; i++) {
   const cl = makeGrassCluster();
-  placeGrass(cl, true);
+  placeGrass(cl);
   grassClusters.push(cl);
   scene.add(cl);
 }
@@ -1021,61 +1026,79 @@ const SHARK_SPECS = [
   { key: 'sandbar', count: 2, length: 4.2, girth: 0.95, color: 0x808d96, belly: 0xdfe6ea, pointy: true, dorsal1: 0.3, dorsal2: 0.08, tailUp: 0.34, tailLow: 0.2 },
 ];
 const sharks = [];
+function launchShark(shark) {
+  const th = Math.random() * Math.PI * 2;          // heading across the world
+  shark.userData.dirA = th;
+  shark.userData.speed = 1.8 + Math.random() * 2.6;
+  shark.userData.bob = Math.random() * Math.PI * 2;
+  const start = -1.2 * WORLD_R;
+  shark.position.set(
+    Math.cos(th) * start + (Math.random() - 0.5) * 24,
+    Y_MIN + 2 + Math.random() * (Y_MAX - Y_MIN - 3),
+    Math.sin(th) * start + (Math.random() - 0.5) * 24
+  );
+  shark.rotation.set(0, -th, 0);                    // model faces +x → aim along heading
+  shark.scale.setScalar(0.85 + Math.random() * 0.5);
+  shark.visible = true;
+}
 for (const spec of SHARK_SPECS) {
   for (let i = 0; i < spec.count; i++) {
     const s = buildShark(spec);
-    s.visible = false;
-    s.userData.active = false;
     s.userData.phase = Math.random() * Math.PI * 2;
     sharks.push(s);
     scene.add(s);
+    launchShark(s);
   }
 }
-let nextSharkAt = 2.5;     // seconds until the first shark passes through
-function launchShark(shark) {
-  const dir = Math.random() < 0.5 ? 1 : -1;
-  shark.userData.active = true;
-  shark.visible = true;
-  shark.userData.dir = dir;
-  shark.userData.speed = 2.6 + Math.random() * 2.6;
-  shark.userData.bob = Math.random() * Math.PI * 2;
-  shark.position.set(dir * -32, -2.5 + Math.random() * 8, -15 - Math.random() * 26);
-  shark.rotation.set(0, dir > 0 ? 0 : Math.PI, 0);
-  shark.scale.setScalar(0.85 + Math.random() * 0.4);
-}
 
-// ---------- Input ----------
-const target = { x: 0, y: 0 };
+// ---------- Input (free-swim look + thrust) ----------
 const keys = {};
-let humpUntil = 0;         // spacebar "happy wiggle" plays until this time
+let humpUntil = 0;            // spacebar "happy wiggle" plays until this time
+let mouseYaw = 0, mousePitch = 0;   // relative look deltas, consumed each frame
 window.addEventListener('keydown', (e) => {
   keys[e.key.toLowerCase()] = true;
   if (e.code === 'Space' || e.key === ' ') {
-    e.preventDefault();                 // don't scroll the page
-    humpUntil = clock.elapsedTime + 1.0; // re-trigger / extend the wiggle
+    e.preventDefault();
+    humpUntil = clock.elapsedTime + 1.0;
   }
+  if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(e.key.toLowerCase())) e.preventDefault();
 });
 window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
-function pointerMove(clientX, clientY) {
-  const nx = (clientX / window.innerWidth) * 2 - 1;
-  const ny = (clientY / window.innerHeight) * 2 - 1;
-  target.x = nx * xRange;
-  target.y = -ny * yRange;
-}
-window.addEventListener('mousemove', (e) => { if (running) pointerMove(e.clientX, e.clientY); });
+// mouse look (relative; works without pointer lock via movementX/Y)
+window.addEventListener('mousemove', (e) => {
+  if (mode !== 'play' || !running) return;
+  mouseYaw -= (e.movementX || 0) * 0.0022;
+  mousePitch -= (e.movementY || 0) * 0.0022;
+});
+// touch look (drag)
+let lastTouch = null;
+window.addEventListener('touchstart', (e) => {
+  lastTouch = e.touches[0] ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+});
 window.addEventListener('touchmove', (e) => {
-  if (running && e.touches[0]) { pointerMove(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }
+  if (mode !== 'play' || !running || !e.touches[0]) return;
+  if (lastTouch) {
+    mouseYaw -= (e.touches[0].clientX - lastTouch.x) * 0.005;
+    mousePitch -= (e.touches[0].clientY - lastTouch.y) * 0.005;
+  }
+  lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  e.preventDefault();
 }, { passive: false });
+window.addEventListener('touchend', () => { lastTouch = null; });
 
 // ---------- Game state ----------
 let running = false;
-let score = 0, dodged = 0, jelliesEaten = 0, speed = 11;
-let graceUntil = 0;        // collisions disabled until this time (start grace period)
+let score = 0, jelliesEaten = 0, lives = 3;
+let graceUntil = 0;        // invulnerable until this time (start + after a hit)
 let chompUntil = 0;        // beak chomps until this time (after eating a jelly)
-const GRACE = 2.0;         // seconds of safe swimming at the start of each run
+const GRACE = 2.5;         // seconds of safe swimming at the start of each run
+const MAX_LIVES = 3;
+const player = { pos: new THREE.Vector3(0, 4, 0), yaw: 0, pitch: 0, speed: 0 };
+let bankCur = 0;
+const _desired = new THREE.Vector3(), _look = new THREE.Vector3();
 const scoreEl = document.getElementById('score');
-const dodgedEl = document.getElementById('dodged');
+const livesEl = document.getElementById('lives');
 const jelliesEl = document.getElementById('jellies');
 const panel = document.getElementById('panel');
 const hud = document.getElementById('hud');
@@ -1085,13 +1108,13 @@ const wiggleText = document.getElementById('wiggle-text');
 let wiggleShown = false;
 
 const wardrobe = document.getElementById('wardrobe');
+const hearts = (n) => '❤'.repeat(Math.max(0, n)) + '🖤'.repeat(Math.max(0, MAX_LIVES - n));
 
 function enterWardrobe() {
   mode = 'wardrobe';
   running = false;
   bags.forEach((b) => (b.visible = false));
   jellies.forEach((j) => (j.visible = false));
-  target.x = 0; target.y = 0;
   panel.classList.add('hidden');
   hud.style.display = 'none';
   wardrobe.classList.remove('hidden');
@@ -1099,17 +1122,16 @@ function enterWardrobe() {
 
 function startGame() {
   mode = 'play';
-  score = 0; dodged = 0; jelliesEaten = 0; speed = 11;
-  target.x = 0; target.y = 0;
-  turtle.position.set(0, 0, 0);
-  turtle.rotation.set(0, Math.PI, 0);
+  score = 0; jelliesEaten = 0; lives = MAX_LIVES;
+  player.pos.set(0, 4, 0); player.yaw = 0; player.pitch = 0; player.speed = 0;
+  mouseYaw = 0; mousePitch = 0; bankCur = 0;
   turtle.scale.setScalar(1);
-  bags.forEach((b) => { b.visible = true; placeBag(b, true); });
-  jellies.forEach((j) => { j.visible = true; placeJelly(j, true); });
+  bags.forEach((b) => { b.visible = true; placeBag(b, player.pos); });
+  jellies.forEach((j) => { j.visible = true; placeJelly(j, player.pos); });
   graceUntil = clock.elapsedTime + GRACE;
   scoreEl.textContent = '0';
-  dodgedEl.textContent = '0';
   jelliesEl.textContent = '0';
+  livesEl.textContent = hearts(lives);
   wardrobe.classList.add('hidden');
   panel.classList.add('hidden');
   hud.style.display = 'flex';
@@ -1119,7 +1141,7 @@ function startGame() {
 function gameOver() {
   running = false;
   hud.style.display = 'none';
-  msg.innerHTML = `A plastic bag caught Friday! 🛑<br><br>You scored <strong>${Math.floor(score)}</strong>, dodged <strong>${dodged}</strong> bags and gobbled <strong>${jelliesEaten}</strong> moon jellies. Marine litter is a real threat to sea turtles — thanks for helping Friday weave through it!`;
+  msg.innerHTML = `Friday's out of lives! 🛑<br><br>You explored the reef, gobbled <strong>${jelliesEaten}</strong> moon jellies and scored <strong>${Math.floor(score)}</strong>. Marine litter is a real threat to sea turtles — thanks for steering Friday clear of it!`;
   playBtn.textContent = 'Swim Again';
   panel.classList.remove('hidden');
 }
@@ -1160,211 +1182,174 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
-  // smooth camera move between wardrobe and play poses
   const inWardrobe = mode === 'wardrobe';
-  const pose = inWardrobe ? CAM_WARDROBE : CAM_PLAY;
-  camera.position.lerp(pose.pos, Math.min(1, 3 * dt));
-  camLook.lerp(pose.look, Math.min(1, 3 * dt));
-  camera.lookAt(camLook);
   turntable.visible = inWardrobe;
   studio.intensity += ((inWardrobe ? 1.3 : 0) - studio.intensity) * Math.min(1, 4 * dt);
   turntable.rotation.y = t * 0.4;
 
-  // spin the propeller beanie / float the halo if chosen
+  // animated hats (both modes)
   const propHat = hatMeshes['propeller'];
-  if (propHat && propHat.visible && propHat.userData.propeller) {
-    propHat.userData.propeller.rotation.y += dt * 14;
-  }
+  if (propHat && propHat.visible) propHat.userData.propeller.rotation.y += dt * 14;
   const haloHat = hatMeshes['halo'];
-  if (haloHat && haloHat.visible && haloHat.userData.halo) {
+  if (haloHat && haloHat.visible) {
     haloHat.userData.halo.position.y = 0.5 + Math.sin(t * 2) * 0.05;
     haloHat.userData.halo.rotation.z += dt * 0.5;
   }
 
+  // flipper flap (both modes; faster while swimming)
+  const flapSpd = inWardrobe ? 2 : 6, flapAmp = inWardrobe ? 0.25 : 0.45;
+  flippers.forEach((f, i) => {
+    f.pivot.rotation.z = Math.sin(t * flapSpd + (i % 2) * Math.PI) * flapAmp * (f.x < 0 ? 1 : -1);
+  });
+
   if (inWardrobe) {
-    // pose Friday on the turntable: slow spin + gentle hover, neutral shape
+    camera.position.lerp(CAM_WARDROBE.pos, Math.min(1, 3 * dt));
+    camLook.lerp(CAM_WARDROBE.look, Math.min(1, 3 * dt));
+    camera.lookAt(camLook);
     turtle.position.set(0, 0.45 + Math.sin(t * 1.2) * 0.06, 0.2);
     turtle.rotation.set(0, t * 0.5, 0);
     turtle.scale.setScalar(1);
     tail.rotation.x = TAIL_BASE_X; tail.position.set(0, -0.12, -2.12);
-    beak.position.y = -0.18;
-    shield.visible = false;
-    flippers.forEach((f, i) => {        // gentle idle flipper sway
-      f.pivot.rotation.z = Math.sin(t * 2 + (i % 2) * Math.PI) * 0.25 * (f.x < 0 ? 1 : -1);
-    });
-    renderAmbient(dt, t, 6);
+    beak.position.y = -0.18; shield.visible = false;
+    renderAmbient(dt, t);
     renderer.render(scene, camera);
     return;
   }
 
-  // keyboard steering (gentler)
-  const kspeed = 6 * dt;
-  if (keys['a'] || keys['arrowleft']) target.x -= kspeed;
-  if (keys['d'] || keys['arrowright']) target.x += kspeed;
-  if (keys['w'] || keys['arrowup']) target.y += kspeed;
-  if (keys['s'] || keys['arrowdown']) target.y -= kspeed;
-  target.x = Math.max(-xRange, Math.min(xRange, target.x));
-  target.y = Math.max(-yRange, Math.min(yRange, target.y));
-
-  // smooth turtle motion + banking (slower, heavier glide)
-  const prevX = turtle.position.x, prevY = turtle.position.y;
-  turtle.position.x += (target.x - turtle.position.x) * Math.min(1, 6 * dt);
-  turtle.position.y += (target.y - turtle.position.y) * Math.min(1, 6 * dt);
-  turtle.position.y += Math.sin(t * 1.5) * 0.003; // gentle idle bob
-  const vx = turtle.position.x - prevX, vy = turtle.position.y - prevY;
-  turtle.rotation.z = THREE.MathUtils.lerp(turtle.rotation.z, -vx * 4, 0.15);
-  turtle.rotation.x = THREE.MathUtils.lerp(turtle.rotation.x, vy * 3, 0.15);
-
-  // spacebar wiggle — fast, aggressive thrusting with a side shimmy, a scale
-  // pulse, and the tail curling down toward the belly. Plus the shout.
-  const wiggling = t < humpUntil;
-  if (wiggling) {
-    const p = Math.sin(t * 26);            // fast thrust
-    const q = Math.sin(t * 13);            // slower shimmy
-    turtle.position.z = 0.7 + p * 1.2;     // big lunge toward / away from camera
-    turtle.position.y += Math.abs(p) * 0.32;
-    turtle.rotation.x = p * 0.95;          // hard pelvic tilt
-    turtle.rotation.z = q * 0.45;          // side-to-side shimmy
-    turtle.rotation.y = Math.PI + q * 0.28;
-    turtle.scale.setScalar(1 + Math.abs(p) * 0.14);
-    // tail curls down and tucks forward toward the belly, wagging
-    tail.rotation.x = TAIL_BASE_X - 1.5 + p * 0.25;
-    tail.position.z = -1.7;
-    tail.position.y = -0.5;
-  } else {
-    if (turtle.position.z !== 0) {
-      turtle.position.z += (0 - turtle.position.z) * Math.min(1, 8 * dt);
-      if (Math.abs(turtle.position.z) < 0.01) turtle.position.z = 0;
-    }
-    turtle.rotation.y += (Math.PI - turtle.rotation.y) * Math.min(1, 10 * dt);
-    turtle.scale.x += (1 - turtle.scale.x) * Math.min(1, 10 * dt);
-    turtle.scale.y = turtle.scale.z = turtle.scale.x;
-    tail.rotation.x += (TAIL_BASE_X - tail.rotation.x) * Math.min(1, 8 * dt);
-    tail.position.z += (-2.12 - tail.position.z) * Math.min(1, 8 * dt);
-    tail.position.y += (-0.12 - tail.position.y) * Math.min(1, 8 * dt);
-  }
-  if (wiggling !== wiggleShown) {                         // toggle the "plane time baby!" shout
-    wiggleText.style.display = wiggling ? 'block' : 'none';
-    wiggleShown = wiggling;
-  }
-
-  // chomp — the beak snaps open and shut after Friday eats a jelly
-  if (t < chompUntil) {
-    beak.position.y = -0.18 - 0.32 * Math.abs(Math.sin(t * 34));
-  } else if (beak.position.y !== -0.18) {
-    beak.position.y += (-0.18 - beak.position.y) * Math.min(1, 12 * dt);
-  }
-
-  // grace-period shield: visible & pulsing while invulnerable at the start
-  const inGrace = running && t < graceUntil;
-  shield.visible = inGrace;
-  if (inGrace) {
-    shield.material.opacity = 0.12 + Math.abs(Math.sin(t * 6)) * 0.14;
-    shield.scale.setScalar(1 + Math.sin(t * 6) * 0.04);
-  }
-
-  // flipper flap
-  flippers.forEach((f, i) => {
-    f.pivot.rotation.z = Math.sin(t * 6 + (i % 2) * Math.PI) * 0.5 * (f.x < 0 ? 1 : -1);
-  });
-
-  if (running) {
-    speed += dt * 0.35;           // ramp difficulty (gentler)
-    score += dt * 10 + dt * speed; // distance + speed bonus
-    scoreEl.textContent = Math.floor(score);
-
-    for (const bag of bags) {
-      bag.position.z += speed * dt;
-      bag.rotation.y += bag.userData.spin * dt;
-      bag.position.x += Math.sin(t + bag.userData.bob) * 0.004;
-
-      // passed the turtle without hitting -> dodged
-      if (!bag.userData.scored && bag.position.z > 2) {
-        bag.userData.scored = true;
-        dodged++;
-        dodgedEl.textContent = dodged;
-      }
-      // recycle
-      if (bag.position.z > 12) placeBag(bag, false);
-
-      // collision near the turtle plane (disabled during the start grace period)
-      if (t > graceUntil && bag.position.z > -1.2 && bag.position.z < 1.2) {
-        const dx = bag.position.x - turtle.position.x;
-        const dy = bag.position.y - turtle.position.y;
-        const hitR = TURTLE_R + 0.5 * bag.scale.x;
-        if (dx * dx + dy * dy < hitR * hitR) { gameOver(); }
-      }
-    }
-
-    // moon jellies — drift toward Friday; swim into one to eat it (it pops)
-    for (const j of jellies) {
-      j.position.z += speed * dt;
-      j.rotation.y += 0.3 * dt;
-
-      if (j.userData.popping) {                 // pop: balloon out & fade, then recycle
-        const k = (t - j.userData.popT) / 0.32;
-        j.scale.setScalar(j.userData.baseScale * (1 + k * 1.6));
-        j.userData.bellMat.opacity = 0.45 * (1 - k);
-        j.userData.gonMat.opacity = 0.6 * (1 - k);
-        if (k >= 1) placeJelly(j, false);
-        continue;
-      }
-
-      j.userData.bell.scale.y = 1 + Math.sin(t * 3 + j.userData.phase) * 0.2;   // bell pulse
-      if (j.position.z > 12) { placeJelly(j, false); continue; }
-
-      // eat when overlapping the turtle
-      if (j.position.z > -1.5 && j.position.z < 1.5) {
-        const dx = j.position.x - turtle.position.x;
-        const dy = j.position.y - turtle.position.y;
-        const r = TURTLE_R + 1.2 * j.scale.x;
-        if (dx * dx + dy * dy < r * r) {
-          j.userData.popping = true;
-          j.userData.popT = t;
-          jelliesEaten++;
-          score += 25;
-          chompUntil = t + 0.45;
-          jelliesEl.textContent = jelliesEaten;
-        }
-      }
-    }
-  }
-
-  renderAmbient(dt, t, running ? speed : 6);
+  if (running) updatePlay(dt, t);
+  renderAmbient(dt, t);
   renderer.render(scene, camera);
 }
 
-// Seagrass sway, drifting sharks and bubbles — shared by both modes.
-function renderAmbient(dt, t, flow) {
+// ---------- Open-world play update ----------
+function updatePlay(dt, t) {
+  // steering — keyboard yaw/pitch plus relative mouse/touch look
+  let yawIn = 0, pitchIn = 0;
+  if (keys['a'] || keys['arrowleft']) yawIn += 1;
+  if (keys['d'] || keys['arrowright']) yawIn -= 1;
+  if (keys['arrowup']) pitchIn += 1;
+  if (keys['arrowdown']) pitchIn -= 1;
+  const yawDelta = yawIn * 1.8 * dt + mouseYaw;
+  player.yaw += yawDelta;
+  player.pitch += pitchIn * 1.2 * dt + mousePitch;
+  mouseYaw = 0; mousePitch = 0;
+  player.pitch = Math.max(-1.0, Math.min(1.0, player.pitch));
+
+  // thrust (W forward, S reverse, wiggle = boost)
+  const wiggling = t < humpUntil;
+  let targetSpeed = 0;
+  if (keys['w']) targetSpeed = 14;
+  else if (keys['s']) targetSpeed = -7;
+  if (wiggling) targetSpeed = 22;
+  player.speed += (targetSpeed - player.speed) * Math.min(1, 3 * dt);
+
+  // move along the heading
+  const cp = Math.cos(player.pitch), sp = Math.sin(player.pitch);
+  const fwd = new THREE.Vector3(Math.sin(player.yaw) * cp, sp, Math.cos(player.yaw) * cp);
+  player.pos.addScaledVector(fwd, player.speed * dt);
+  const horiz = Math.hypot(player.pos.x, player.pos.z);
+  if (horiz > WORLD_R) { const k = WORLD_R / horiz; player.pos.x *= k; player.pos.z *= k; }
+  player.pos.y = Math.max(Y_MIN, Math.min(Y_MAX, player.pos.y));
+
+  // apply transform (bank into turns)
+  turtle.position.copy(player.pos);
+  const bankTarget = Math.max(-0.5, Math.min(0.5, -yawDelta / Math.max(dt, 0.0001) * 0.05));
+  bankCur += (bankTarget - bankCur) * Math.min(1, 6 * dt);
+  turtle.rotation.set(-player.pitch, player.yaw, bankCur, 'YXZ');
+
+  // spacebar wiggle visuals + shout
+  if (wiggling) {
+    const p = Math.sin(t * 26);
+    turtle.scale.setScalar(1 + Math.abs(p) * 0.14);
+    tail.rotation.x = TAIL_BASE_X - 1.5 + p * 0.25;
+    tail.position.set(0, -0.5, -1.7);
+  } else {
+    turtle.scale.x += (1 - turtle.scale.x) * Math.min(1, 10 * dt);
+    turtle.scale.y = turtle.scale.z = turtle.scale.x;
+    tail.rotation.x += (TAIL_BASE_X - tail.rotation.x) * Math.min(1, 8 * dt);
+    tail.position.x += (0 - tail.position.x) * Math.min(1, 8 * dt);
+    tail.position.y += (-0.12 - tail.position.y) * Math.min(1, 8 * dt);
+    tail.position.z += (-2.12 - tail.position.z) * Math.min(1, 8 * dt);
+  }
+  if (wiggling !== wiggleShown) { wiggleText.style.display = wiggling ? 'block' : 'none'; wiggleShown = wiggling; }
+
+  // chomp after eating
+  if (t < chompUntil) beak.position.y = -0.18 - 0.32 * Math.abs(Math.sin(t * 34));
+  else if (beak.position.y !== -0.18) beak.position.y += (-0.18 - beak.position.y) * Math.min(1, 12 * dt);
+
+  // chase camera behind the turtle
+  const hf = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw));
+  _desired.copy(player.pos).addScaledVector(hf, -7);
+  _desired.y += 2.6 - sp * 2.5;
+  camera.position.lerp(_desired, Math.min(1, 4 * dt));
+  _look.copy(player.pos).addScaledVector(fwd, 4);
+  camLook.lerp(_look, Math.min(1, 6 * dt));
+  camera.lookAt(camLook);
+
+  // invulnerability shield (start grace + after a hit)
+  const inGrace = t < graceUntil;
+  shield.visible = inGrace;
+  if (inGrace) { shield.material.opacity = 0.1 + Math.abs(Math.sin(t * 8)) * 0.16; shield.scale.setScalar(1 + Math.sin(t * 8) * 0.05); }
+  else shield.scale.setScalar(1);
+
+  // plastic bags — bob/spin obstacles; hitting one costs a life
+  for (const bag of bags) {
+    bag.rotation.y += bag.userData.spin * dt;
+    bag.position.y = bag.userData.bobBase + Math.sin(t + bag.userData.bob) * 0.3;
+    if (!inGrace && bag.position.distanceTo(player.pos) < TURTLE_R + 0.6 * bag.scale.x + 0.5) {
+      lives--; livesEl.textContent = hearts(lives);
+      graceUntil = t + 1.6;
+      player.pos.addScaledVector(fwd, -3.5); player.speed *= -0.3;
+      if (lives <= 0) { gameOver(); return; }
+    }
+  }
+
+  // moon jellies — bob & pulse in place; swim into one to eat it (it pops)
+  for (const j of jellies) {
+    if (j.userData.popping) {
+      const k = (t - j.userData.popT) / 0.32;
+      j.scale.setScalar(j.userData.baseScale * (1 + k * 1.6));
+      j.userData.bellMat.opacity = 0.45 * (1 - k);
+      j.userData.gonMat.opacity = 0.6 * (1 - k);
+      if (k >= 1) placeJelly(j, player.pos);
+      continue;
+    }
+    j.userData.bell.scale.y = 1 + Math.sin(t * 3 + j.userData.phase) * 0.2;
+    j.position.y = j.userData.baseY + Math.sin(t * 0.8 + j.userData.phase) * 0.25;
+    j.rotation.y += 0.3 * dt;
+    if (j.position.distanceTo(player.pos) < TURTLE_R + 1.0 * j.scale.x) {
+      j.userData.popping = true; j.userData.popT = t;
+      jelliesEaten++; score += 25; chompUntil = t + 0.45;
+      jelliesEl.textContent = jelliesEaten;
+    }
+  }
+
+  score += dt * 3;
+  scoreEl.textContent = Math.floor(score);
+}
+
+// ---------- Ambient world (seagrass sway, roaming sharks, bubbles) ----------
+function renderAmbient(dt, t) {
   for (const cl of grassClusters) {
-    cl.position.z += flow * dt;
-    if (cl.position.z > 14) placeGrass(cl, false);
     for (const blade of cl.userData.blades) {
       blade.rotation.z = Math.sin(t * 1.6 + blade.userData.phase) * blade.userData.sway;
     }
   }
 
-  if (t > nextSharkAt) {
-    const idle = sharks.filter((s) => !s.userData.active);
-    if (idle.length) launchShark(idle[Math.floor(Math.random() * idle.length)]);
-    nextSharkAt = t + 3.5 + Math.random() * 6;
-  }
   for (const shark of sharks) {
-    if (!shark.userData.active) continue;
-    shark.position.x += shark.userData.dir * shark.userData.speed * dt;
-    shark.position.y += Math.sin(t * 1.2 + shark.userData.bob) * 0.005;
+    const th = shark.userData.dirA;
+    shark.position.x += Math.cos(th) * shark.userData.speed * dt;
+    shark.position.z += Math.sin(th) * shark.userData.speed * dt;
+    shark.position.y += Math.sin(t * 1.0 + shark.userData.bob) * 0.006;
     shark.userData.tail.rotation.y = Math.sin(t * 5 + shark.userData.phase) * 0.5;
-    shark.rotation.z = Math.sin(t * 2.5 + shark.userData.phase) * 0.06;
-    if (Math.abs(shark.position.x) > 34) { shark.userData.active = false; shark.visible = false; }
+    if (Math.hypot(shark.position.x, shark.position.z) > WORLD_R * 1.3) launchShark(shark);
   }
 
   const bp = bubbleGeo.attributes.position;
   for (let i = 0; i < BUB; i++) {
-    let z = bp.getZ(i) + flow * dt;
     let y = bp.getY(i) + dt * 0.6;
-    if (z > 12) z = -80;
-    if (y > 12) y = -12;
-    bp.setZ(i, z); bp.setY(i, y);
+    if (y > Y_MAX + 4) y = Y_MIN;
+    bp.setY(i, y);
   }
   bp.needsUpdate = true;
 }
