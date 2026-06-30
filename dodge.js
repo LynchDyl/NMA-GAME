@@ -397,43 +397,153 @@ for (let i = 0; i < GRASS_N; i++) {
   scene.add(cl);
 }
 
-// ---------- Background fish school ----------
-// Small silhouetted fish drifting slowly across the deep background.
-const fishMat = new THREE.MeshStandardMaterial({ color: 0x16475f, roughness: 1, transparent: true, opacity: 0.8 });
-function makeFish() {
-  const f = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.7, 8), fishMat);
-  body.rotation.z = -Math.PI / 2;
-  f.add(body);
-  const tailFin = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.28, 4), fishMat);
-  tailFin.rotation.z = Math.PI / 2;
-  tailFin.position.x = -0.42;
-  f.add(tailFin);
-  return f;
+// ---------- Sharks ----------
+// Distinct low-poly shark species that cruise through the background now and
+// then: 1 zebra shark ("Zeus"), 3 sand tiger, 3 nurse, 2 sandbar. Each swims
+// along +x (snout forward) and is flipped for the other direction.
+function makeFinGeo(w, h, depth = 0.06) {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0); s.lineTo(w, 0); s.lineTo(w * 0.25, h); s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false });
+  g.translate(0, 0, -depth / 2);
+  return g;
 }
-const FISH_N = 16;
-const fishes = [];
-function placeFish(fish) {
-  fish.userData.dir = Math.random() < 0.5 ? 1 : -1;
-  fish.position.set(fish.userData.dir * -20, (Math.random() - 0.3) * 14, -28 - Math.random() * 28);
-  fish.userData.speed = 1.2 + Math.random() * 1.6;
-  fish.userData.bob = Math.random() * Math.PI * 2;
-  const s = 0.7 + Math.random() * 0.9;
-  fish.scale.setScalar(s);
-  fish.rotation.y = fish.userData.dir > 0 ? 0 : Math.PI;
+function makeTailGeo(len, up, low, depth = 0.06) {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0); s.lineTo(-len, up); s.lineTo(-len * 0.55, up * 0.18); s.lineTo(-len * 0.78, -low); s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false });
+  g.translate(0, 0, -depth / 2);
+  return g;
 }
-for (let i = 0; i < FISH_N; i++) {
-  const f = makeFish();
-  placeFish(f);
-  f.position.x = (Math.random() - 0.5) * 40; // spread initially
-  fishes.push(f);
-  scene.add(f);
+function makeLabelSprite(text) {
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+  const x = cv.getContext('2d');
+  x.font = 'bold 70px Segoe UI, Tahoma, sans-serif';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.lineWidth = 10; x.strokeStyle = 'rgba(0,0,0,0.65)'; x.strokeText(text, 128, 64);
+  x.fillStyle = '#ffef6e'; x.fillText(text, 128, 64);
+  const tex = new THREE.CanvasTexture(cv);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+  sp.scale.set(2.4, 1.2, 1);
+  return sp;
+}
+
+function buildShark(spec) {
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color: spec.color, roughness: 0.75, flatShading: true });
+  const bellyMat = new THREE.MeshStandardMaterial({ color: spec.belly, roughness: 0.85, flatShading: true });
+  const L = spec.length, G = spec.girth;
+
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), bodyMat);
+  body.scale.set(L * 0.5, L * 0.16 * G, L * 0.13 * G);
+  g.add(body);
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), bellyMat);
+  belly.scale.set(L * 0.46, L * 0.10 * G, L * 0.11 * G);
+  belly.position.y = -L * 0.06 * G;
+  g.add(belly);
+
+  if (spec.pointy) {
+    const snout = new THREE.Mesh(new THREE.ConeGeometry(L * 0.12 * G, L * 0.34, 12), bodyMat);
+    snout.rotation.z = -Math.PI / 2; snout.position.x = L * 0.52;
+    g.add(snout);
+  } else {
+    const snout = new THREE.Mesh(new THREE.SphereGeometry(L * 0.14 * G, 12, 10), bodyMat);
+    snout.scale.set(1.15, 0.85, 1.05); snout.position.x = L * 0.46;
+    g.add(snout);
+  }
+  if (spec.barbels) {                       // nurse shark whisker barbels
+    for (const sx of [-1, 1]) {
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.015, 0.45, 5), bellyMat);
+      b.rotation.z = Math.PI / 2.3; b.position.set(L * 0.52, -L * 0.07, sx * 0.12);
+      g.add(b);
+    }
+  }
+
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a });
+  for (const sx of [-1, 1]) {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(L * 0.028, 8, 8), eyeMat);
+    e.position.set(L * 0.4, L * 0.03, sx * L * 0.1 * G);
+    g.add(e);
+  }
+
+  const d1 = new THREE.Mesh(makeFinGeo(L * 0.24, spec.dorsal1 * L), bodyMat);
+  d1.position.set(L * 0.06, L * 0.14 * G, 0); g.add(d1);
+  if (spec.dorsal2) {
+    const d2 = new THREE.Mesh(makeFinGeo(L * 0.17, spec.dorsal2 * L), bodyMat);
+    d2.position.set(-L * 0.24, L * 0.13 * G, 0); g.add(d2);
+  }
+  for (const sx of [-1, 1]) {               // pectoral fins
+    const p = new THREE.Mesh(makeFinGeo(L * 0.22, L * 0.18), bodyMat);
+    p.position.set(L * 0.2, -L * 0.05, sx * L * 0.1 * G);
+    p.rotation.x = sx * Math.PI / 2; p.rotation.y = sx * -0.6; p.rotation.z = -0.25;
+    g.add(p);
+  }
+
+  const tail = new THREE.Mesh(makeTailGeo(L * 0.32, spec.tailUp * L, spec.tailLow * L), bodyMat);
+  tail.position.set(-L * 0.5, 0, 0); g.add(tail);
+
+  if (spec.spots) {                          // zebra shark adult spotting
+    const spotMat = new THREE.MeshStandardMaterial({ color: 0x4a3a1e, roughness: 0.7 });
+    for (let i = 0; i < 26; i++) {
+      const sp = new THREE.Mesh(new THREE.SphereGeometry(L * 0.024, 6, 6), spotMat);
+      const ang = Math.random() * Math.PI - Math.PI / 2;
+      sp.position.set((Math.random() - 0.45) * L * 0.85,
+        Math.sin(ang) * L * 0.15 * G, Math.cos(ang) * L * 0.13 * G);
+      sp.scale.set(1, 0.4, 1);
+      g.add(sp);
+    }
+  }
+  if (spec.name) {
+    const label = makeLabelSprite(spec.name);
+    label.position.set(0, L * 0.34, 0);
+    g.add(label);
+  }
+
+  g.userData.tail = tail;
+  return g;
+}
+
+const SHARK_SPECS = [
+  { key: 'zebra', name: 'Zeus', count: 1, length: 4.6, girth: 0.9, color: 0xc2a25e, belly: 0xe6dcb8, pointy: false, dorsal1: 0.18, dorsal2: 0.10, tailUp: 0.52, tailLow: 0.12, spots: true },
+  { key: 'sandtiger', count: 3, length: 5.0, girth: 1.05, color: 0x9a9384, belly: 0xd8d2c2, pointy: true, dorsal1: 0.2, dorsal2: 0.18, tailUp: 0.32, tailLow: 0.18 },
+  { key: 'nurse', count: 3, length: 4.6, girth: 1.18, color: 0x6e5a3a, belly: 0xb9a784, pointy: false, barbels: true, dorsal1: 0.14, dorsal2: 0.12, tailUp: 0.42, tailLow: 0.08 },
+  { key: 'sandbar', count: 2, length: 4.2, girth: 0.95, color: 0x808d96, belly: 0xdfe6ea, pointy: true, dorsal1: 0.3, dorsal2: 0.08, tailUp: 0.34, tailLow: 0.2 },
+];
+const sharks = [];
+for (const spec of SHARK_SPECS) {
+  for (let i = 0; i < spec.count; i++) {
+    const s = buildShark(spec);
+    s.visible = false;
+    s.userData.active = false;
+    s.userData.phase = Math.random() * Math.PI * 2;
+    sharks.push(s);
+    scene.add(s);
+  }
+}
+let nextSharkAt = 2.5;     // seconds until the first shark passes through
+function launchShark(shark) {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  shark.userData.active = true;
+  shark.visible = true;
+  shark.userData.dir = dir;
+  shark.userData.speed = 2.6 + Math.random() * 2.6;
+  shark.userData.bob = Math.random() * Math.PI * 2;
+  shark.position.set(dir * -32, -2.5 + Math.random() * 8, -15 - Math.random() * 26);
+  shark.rotation.set(0, dir > 0 ? 0 : Math.PI, 0);
+  shark.scale.setScalar(0.85 + Math.random() * 0.4);
 }
 
 // ---------- Input ----------
 const target = { x: 0, y: 0 };
 const keys = {};
-window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
+let humpUntil = 0;         // spacebar "happy wiggle" plays until this time
+window.addEventListener('keydown', (e) => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.code === 'Space' || e.key === ' ') {
+    e.preventDefault();                 // don't scroll the page
+    humpUntil = clock.elapsedTime + 1.0; // re-trigger / extend the wiggle
+  }
+});
 window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
 function pointerMove(clientX, clientY) {
@@ -458,6 +568,8 @@ const panel = document.getElementById('panel');
 const hud = document.getElementById('hud');
 const msg = document.getElementById('msg');
 const playBtn = document.getElementById('play');
+const wiggleText = document.getElementById('wiggle-text');
+let wiggleShown = false;
 
 function startGame() {
   score = 0; dodged = 0; speed = 18;
@@ -518,6 +630,22 @@ function animate() {
   turtle.rotation.z = THREE.MathUtils.lerp(turtle.rotation.z, -vx * 4, 0.15);
   turtle.rotation.x = THREE.MathUtils.lerp(turtle.rotation.x, vy * 3, 0.15);
 
+  // spacebar "happy wiggle" — a cheeky rhythmic thrust + bob, with a shout
+  const wiggling = t < humpUntil;
+  if (wiggling) {
+    const p = Math.sin(t * 16);
+    turtle.position.z = 0.45 + p * 0.55;                 // thrust toward / away from camera
+    turtle.position.y += Math.abs(p) * 0.12;             // little hop on each beat
+    turtle.rotation.x = p * 0.4;                         // pelvic tilt
+  } else if (turtle.position.z !== 0) {
+    turtle.position.z += (0 - turtle.position.z) * Math.min(1, 8 * dt);
+    if (Math.abs(turtle.position.z) < 0.01) turtle.position.z = 0;
+  }
+  if (wiggling !== wiggleShown) {                         // toggle the "plane time baby!" shout
+    wiggleText.style.display = wiggling ? 'block' : 'none';
+    wiggleShown = wiggling;
+  }
+
   // grace-period shield: visible & pulsing while invulnerable at the start
   const inGrace = running && t < graceUntil;
   shield.visible = inGrace;
@@ -572,14 +700,19 @@ function animate() {
     }
   }
 
-  // background fish drift across and slowly toward the camera
-  for (const fish of fishes) {
-    fish.position.x += fish.userData.dir * fish.userData.speed * dt;
-    fish.position.z += flow * 0.25 * dt;
-    fish.position.y += Math.sin(t * 1.5 + fish.userData.bob) * 0.004;
-    if (fish.userData.dir > 0 && fish.position.x > 22) placeFish(fish);
-    else if (fish.userData.dir < 0 && fish.position.x < -22) placeFish(fish);
-    else if (fish.position.z > 8) placeFish(fish);
+  // occasionally send a shark cruising across the background
+  if (t > nextSharkAt) {
+    const idle = sharks.filter((s) => !s.userData.active);
+    if (idle.length) launchShark(idle[Math.floor(Math.random() * idle.length)]);
+    nextSharkAt = t + 3.5 + Math.random() * 6;   // next one in a few seconds
+  }
+  for (const shark of sharks) {
+    if (!shark.userData.active) continue;
+    shark.position.x += shark.userData.dir * shark.userData.speed * dt;
+    shark.position.y += Math.sin(t * 1.2 + shark.userData.bob) * 0.005;
+    shark.userData.tail.rotation.y = Math.sin(t * 5 + shark.userData.phase) * 0.5;   // swimming wag
+    shark.rotation.z = Math.sin(t * 2.5 + shark.userData.phase) * 0.06;              // gentle roll
+    if (Math.abs(shark.position.x) > 34) { shark.userData.active = false; shark.visible = false; }
   }
 
   // bubbles drift toward camera
