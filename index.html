@@ -3,61 +3,70 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Scrub Friday! - National Marine Aquarium</title>
-<link rel="stylesheet" href="style.css">
+<title>Friday the Turtle Games — National Marine Aquarium, Plymouth</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    background: linear-gradient(180deg, #021b2e 0%, #0a3d62 40%, #1e6091 100%);
+    min-height: 100vh; color: #eaf6ff;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 40px 20px; text-align: center;
+  }
+  header { margin-bottom: 8px; }
+  h1 { font-size: 2.1rem; }
+  .sub { opacity: 0.8; margin: 6px 0 30px; }
+  .games {
+    display: flex; flex-wrap: wrap; gap: 24px;
+    justify-content: center; max-width: 760px;
+  }
+  .card {
+    width: 320px; background: rgba(4,30,50,0.6);
+    border: 1px solid rgba(120,200,255,0.25); border-radius: 18px;
+    padding: 26px 24px; text-decoration: none; color: inherit;
+    transition: transform 0.12s, box-shadow 0.15s, border-color 0.15s;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 40px rgba(0,0,0,0.45);
+    border-color: rgba(120,200,255,0.6);
+  }
+  .emoji { font-size: 3rem; margin-bottom: 10px; }
+  .card h2 { font-size: 1.3rem; margin-bottom: 8px; }
+  .card p { font-size: 0.92rem; line-height: 1.5; opacity: 0.85; margin-bottom: 16px; }
+  .badge {
+    background: #2ecc71; color: #06281a; font-weight: bold;
+    padding: 9px 18px; border-radius: 9px; font-size: 0.95rem;
+  }
+  footer { margin-top: 36px; opacity: 0.7; font-size: 0.85rem; max-width: 520px; line-height: 1.5; }
+</style>
 </head>
 <body>
-  <div id="game-container">
-    <header>
-      <h1>🐢 Scrub Friday the Turtle!</h1>
-      <p class="subtitle">National Marine Aquarium, Plymouth</p>
-    </header>
+  <header>
+    <h1>🐢 Friday the Turtle Games</h1>
+    <p class="sub">Inspired by Friday, the green sea turtle at the National Marine Aquarium, Plymouth</p>
+  </header>
 
-    <div id="hud">
-      <div class="hud-item">Score: <span id="score">0</span></div>
-      <div class="hud-item">Time: <span id="time">30</span>s</div>
-      <div class="hud-item">Level: <span id="level">1</span></div>
-    </div>
+  <div class="games">
+    <a class="card" href="scrub.html">
+      <div class="emoji">🧽</div>
+      <h2>Scrub Friday!</h2>
+      <p>Friday's shell is covered in Aptasia anemones. Click or tap to scrub them all off before time runs out — and level up!</p>
+      <span class="badge">Play 2D &rarr;</span>
+    </a>
 
-    <div id="stage">
-      <div id="turtle-wrap">
-        <svg id="turtle" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
-          <ellipse cx="80" cy="150" rx="35" ry="22" fill="#3c8c5c" />
-          <ellipse cx="340" cy="150" rx="30" ry="20" fill="#3c8c5c" />
-          <ellipse cx="120" cy="80" rx="22" ry="18" fill="#3c8c5c" />
-          <ellipse cx="280" cy="80" rx="22" ry="18" fill="#3c8c5c" />
-          <ellipse cx="120" cy="220" rx="22" ry="18" fill="#3c8c5c" />
-          <ellipse cx="280" cy="220" rx="22" ry="18" fill="#3c8c5c" />
-          <circle cx="60" cy="150" r="28" fill="#4caf6e" />
-          <circle cx="48" cy="142" r="4" fill="#1a1a1a" />
-          <ellipse id="shell" cx="200" cy="150" rx="150" ry="100" fill="#7a5230" stroke="#4a3018" stroke-width="4"/>
-          <g id="shell-pattern" fill="#5c3d22" stroke="#4a3018" stroke-width="2">
-            <polygon points="200,90 230,120 215,150 185,150 170,120"/>
-            <polygon points="140,110 170,120 160,150 130,150 115,125"/>
-            <polygon points="260,110 230,120 240,150 270,150 285,125"/>
-            <polygon points="200,150 215,150 225,180 200,200 175,180 185,150"/>
-            <polygon points="130,150 160,150 175,180 150,200 115,180"/>
-            <polygon points="270,150 240,150 225,180 250,200 285,180"/>
-          </g>
-        </svg>
-        <div id="spots-layer"></div>
-      </div>
-      <div id="sponge" aria-hidden="true">🧽</div>
-    </div>
-
-    <div id="overlay">
-      <div id="overlay-content">
-        <h2 id="overlay-title">Friday Needs Your Help!</h2>
-        <p id="overlay-text">
-          Aptasia anemones have spread across Friday's shell! Click or tap each
-          aptasia spot to scrub it clean before time runs out. Clear the shell
-          to level up — Friday gets faster every round!
-        </p>
-        <button id="start-btn">Start Scrubbing</button>
-      </div>
-    </div>
+    <a class="card" href="dodge.html">
+      <div class="emoji">🌊</div>
+      <h2>Friday's Ocean Dash</h2>
+      <p>Swim as Friday through the open ocean in 3D and dodge the drifting plastic bags. Survive as long as you can!</p>
+      <span class="badge">Play 3D &rarr;</span>
+    </a>
   </div>
 
-  <script src="game.js"></script>
+  <footer>
+    Two small browser games about keeping a sea turtle healthy — scrubbing
+    off anemones and weaving through marine litter. No install needed.
+  </footer>
 </body>
 </html>

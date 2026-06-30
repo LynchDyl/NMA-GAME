@@ -3,21 +3,23 @@
 Two browser games inspired by **Friday the green sea turtle** at the
 **National Marine Aquarium in Plymouth**.
 
+Open `index.html` for a landing page that links to both games.
+
 ---
 
-## 1. Scrub Friday the Turtle! — `index.html`
+## 1. Scrub Friday the Turtle! — `scrub.html`
 
 Friday's shell keeps getting colonised by *Aptasia* anemones — your job is to
 scrub them all off and keep him healthy!
 
 **How to play**
-- Open `index.html` in any modern browser (or serve the folder over HTTP).
+- Open `scrub.html` in any modern browser (or serve the folder over HTTP).
 - Click / tap each pink **Aptasia** spot to scrub it off Friday's shell.
 - Clear every spot to **level up** — more spots appear and the timer gets
   shorter each round.
 - Rack up the highest score before time runs out!
 
-Files: `index.html`, `style.css`, `game.js` — plain HTML/CSS/JS, no build step.
+Files: `scrub.html`, `style.css`, `game.js` — plain HTML/CSS/JS, no build step.
 
 ---
 
