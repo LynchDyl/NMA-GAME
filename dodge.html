@@ -45,6 +45,20 @@
   button:hover { background: #27ae60; transform: translateY(-1px); }
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #cfe8ff; }
 
+  /* spacebar wiggle shout */
+  #wiggle-text {
+    position: fixed; top: 18%; left: 50%; transform: translateX(-50%) rotate(-4deg);
+    z-index: 6; pointer-events: none; display: none;
+    font-size: clamp(1.6rem, 6vw, 3.4rem); font-weight: 900; font-style: italic;
+    color: #fff170; -webkit-text-stroke: 2px #06283a;
+    text-shadow: 0 4px 0 #06283a, 0 0 18px rgba(255,241,112,0.6);
+    letter-spacing: 1px; animation: wigglePop 0.4s ease-out infinite alternate;
+  }
+  @keyframes wigglePop {
+    from { transform: translateX(-50%) rotate(-5deg) scale(1); }
+    to   { transform: translateX(-50%) rotate(4deg) scale(1.12); }
+  }
+
   /* soft underwater vignette for depth */
   #vignette {
     position: fixed; inset: 0; pointer-events: none; z-index: 2;
@@ -72,6 +86,7 @@
   <div id="loading">Loading the ocean…</div>
   <canvas id="c"></canvas>
   <div id="vignette"></div>
+  <div id="wiggle-text">plane time baby!</div>
 
   <div id="hud" class="layer" style="display:none">
     <div><div class="lbl">SCORE</div><div class="big"><span id="score">0</span></div></div>
