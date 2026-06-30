@@ -244,9 +244,9 @@ const flippers = [];
 function makeFlipper(x, z, front) {
   const pivot = new THREE.Group();
   pivot.position.set(x, -0.05, z);
-  if (x < 0) pivot.scale.x = -1;     // mirror to the left side
+  const side = x < 0 ? -1 : 1;
 
-  const L = front ? 2.5 : 1.3, w = front ? 0.62 : 0.5;
+  const L = front ? 2.5 : 1.45, w = front ? 0.62 : 0.54;
   const geo = paddleGeometry(L, w);
 
   const top = new THREE.Mesh(geo, skinMat);
@@ -262,20 +262,25 @@ function makeFlipper(x, z, front) {
     claw.rotation.z = -Math.PI / 2;
     pivot.add(claw);
   }
-  // rest pose: front flippers swept slightly forward, rear angled back
-  pivot.rotation.y = front ? -0.5 : 1.9;
+  // Rest pose without negative-scale mirroring (which made the two sides
+  // asymmetric). The paddle points +x; the right side keeps that, the left
+  // is the true mirror (PI - sweep). Front flippers sweep forward, rear back.
+  const sweep = front ? -0.4 : 0.7;
+  const baseY = side > 0 ? sweep : Math.PI - sweep;
+  pivot.rotation.y = baseY;
   turtle.add(pivot);
-  flippers.push({ pivot, x, front, baseY: pivot.rotation.y });
+  flippers.push({ pivot, x, side, front, baseY });
 }
 makeFlipper(-1.2, 0.85, true);
 makeFlipper(1.2, 0.85, true);
 makeFlipper(-1.0, -1.25, false);
 makeFlipper(1.0, -1.25, false);
 
-// short pointed tail
-const tail = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.6, 8), skinMat);
-tail.rotation.x = -Math.PI / 2;
-tail.position.set(0, -0.12, -2.05);
+// short pointed tail (slightly larger)
+const tail = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.85, 8), skinMat);
+const TAIL_BASE_X = -Math.PI / 2;   // points straight back
+tail.rotation.x = TAIL_BASE_X;
+tail.position.set(0, -0.12, -2.12);
 turtle.add(tail);
 
 // protective bubble shown during the start grace period
@@ -318,7 +323,7 @@ function makeBag() {
   return g;
 }
 
-const BAG_COUNT = 22;
+const BAG_COUNT = 12;
 const bags = [];
 const SPAWN_Z = -70;
 const xRange = 5.2, yRange = 3.0;
@@ -326,7 +331,7 @@ const xRange = 5.2, yRange = 3.0;
 function placeBag(bag, initial) {
   bag.position.x = (Math.random() - 0.5) * 2 * xRange;
   bag.position.y = (Math.random() - 0.5) * 2 * yRange;
-  bag.position.z = initial ? -26 - Math.random() * 50 : SPAWN_Z - Math.random() * 20;
+  bag.position.z = initial ? -26 - Math.random() * 60 : SPAWN_Z - Math.random() * 30;
   bag.userData.spin = (Math.random() - 0.5) * 1.2;
   bag.userData.bob = Math.random() * Math.PI * 2;
   bag.userData.scored = false;
@@ -339,6 +344,67 @@ for (let i = 0; i < BAG_COUNT; i++) {
   placeBag(b, true);
   bags.push(b);
   scene.add(b);
+}
+
+// ---------- Moon jellyfish (edible) ----------
+// Detailed translucent moon jellies (Aurelia): a pulsing bell, four
+// horseshoe gonads and trailing oral arms. Swim into one to eat it — it pops.
+function makeJelly() {
+  const g = new THREE.Group();
+  const bellMat = new THREE.MeshStandardMaterial({
+    color: 0xcfe9ff, transparent: true, opacity: 0.45, roughness: 0.15,
+    side: THREE.DoubleSide, depthWrite: false
+  });
+  const gonMat = new THREE.MeshStandardMaterial({
+    color: 0xe48fd0, transparent: true, opacity: 0.6, roughness: 0.4,
+    side: THREE.DoubleSide, depthWrite: false
+  });
+
+  const bell = new THREE.Mesh(
+    new THREE.SphereGeometry(0.8, 22, 16, 0, Math.PI * 2, 0, Math.PI * 0.55), bellMat);
+  g.add(bell);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.74, 0.06, 8, 26), bellMat);
+  rim.rotation.x = Math.PI / 2; rim.position.y = -0.02;
+  bell.add(rim);
+
+  for (let i = 0; i < 4; i++) {              // four horseshoe-shaped gonads
+    const horse = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.05, 8, 16, Math.PI * 1.35), gonMat);
+    const a = (i / 4) * Math.PI * 2;
+    horse.position.set(Math.cos(a) * 0.26, 0.16, Math.sin(a) * 0.26);
+    horse.rotation.x = Math.PI / 2; horse.rotation.z = a;
+    g.add(horse);
+  }
+  const arms = [];
+  for (let i = 0; i < 10; i++) {             // trailing oral arms / tentacles
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.005, 0.75, 5), bellMat);
+    const a = (i / 10) * Math.PI * 2, r = i % 2 ? 0.18 : 0.42;
+    arm.position.set(Math.cos(a) * r, -0.4, Math.sin(a) * r);
+    g.add(arm); arms.push(arm);
+  }
+
+  g.userData = { bell, arms, bellMat, gonMat, popping: false, popT: 0, baseScale: 1, phase: 0 };
+  return g;
+}
+
+const JELLY_COUNT = 5;
+const jellies = [];
+function placeJelly(j, initial) {
+  j.position.x = (Math.random() - 0.5) * 2 * xRange;
+  j.position.y = (Math.random() - 0.5) * 2 * yRange;
+  j.position.z = initial ? -34 - Math.random() * 46 : SPAWN_Z - Math.random() * 30;
+  j.userData.popping = false;
+  j.userData.bellMat.opacity = 0.45;
+  j.userData.gonMat.opacity = 0.6;
+  j.userData.phase = Math.random() * Math.PI * 2;
+  j.userData.baseScale = 0.75 + Math.random() * 0.6;
+  j.scale.setScalar(j.userData.baseScale);
+  j.visible = true;
+}
+for (let i = 0; i < JELLY_COUNT; i++) {
+  const j = makeJelly();
+  placeJelly(j, true);
+  jellies.push(j);
+  scene.add(j);
 }
 
 // ---------- Bubbles ----------
@@ -559,11 +625,13 @@ window.addEventListener('touchmove', (e) => {
 
 // ---------- Game state ----------
 let running = false;
-let score = 0, dodged = 0, speed = 18;
+let score = 0, dodged = 0, jelliesEaten = 0, speed = 11;
 let graceUntil = 0;        // collisions disabled until this time (start grace period)
+let chompUntil = 0;        // beak chomps until this time (after eating a jelly)
 const GRACE = 2.0;         // seconds of safe swimming at the start of each run
 const scoreEl = document.getElementById('score');
 const dodgedEl = document.getElementById('dodged');
+const jelliesEl = document.getElementById('jellies');
 const panel = document.getElementById('panel');
 const hud = document.getElementById('hud');
 const msg = document.getElementById('msg');
@@ -572,13 +640,15 @@ const wiggleText = document.getElementById('wiggle-text');
 let wiggleShown = false;
 
 function startGame() {
-  score = 0; dodged = 0; speed = 18;
+  score = 0; dodged = 0; jelliesEaten = 0; speed = 11;
   target.x = 0; target.y = 0;
   turtle.position.set(0, 0, 0);
   bags.forEach((b) => placeBag(b, true));
+  jellies.forEach((j) => placeJelly(j, true));
   graceUntil = clock.elapsedTime + GRACE;
   scoreEl.textContent = '0';
   dodgedEl.textContent = '0';
+  jelliesEl.textContent = '0';
   panel.classList.add('hidden');
   hud.style.display = 'flex';
   running = true;
@@ -587,7 +657,7 @@ function startGame() {
 function gameOver() {
   running = false;
   hud.style.display = 'none';
-  msg.innerHTML = `A plastic bag caught Friday! 🛑<br><br>You scored <strong>${Math.floor(score)}</strong> and dodged <strong>${dodged}</strong> bags. Marine litter is a real threat to sea turtles — thanks for helping Friday weave through it!`;
+  msg.innerHTML = `A plastic bag caught Friday! 🛑<br><br>You scored <strong>${Math.floor(score)}</strong>, dodged <strong>${dodged}</strong> bags and gobbled <strong>${jelliesEaten}</strong> moon jellies. Marine litter is a real threat to sea turtles — thanks for helping Friday weave through it!`;
   playBtn.textContent = 'Swim Again';
   panel.classList.remove('hidden');
 }
@@ -612,8 +682,8 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
-  // keyboard steering
-  const kspeed = 9 * dt;
+  // keyboard steering (gentler)
+  const kspeed = 6 * dt;
   if (keys['a'] || keys['arrowleft']) target.x -= kspeed;
   if (keys['d'] || keys['arrowright']) target.x += kspeed;
   if (keys['w'] || keys['arrowup']) target.y += kspeed;
@@ -621,29 +691,53 @@ function animate() {
   target.x = Math.max(-xRange, Math.min(xRange, target.x));
   target.y = Math.max(-yRange, Math.min(yRange, target.y));
 
-  // smooth turtle motion + banking
+  // smooth turtle motion + banking (slower, heavier glide)
   const prevX = turtle.position.x, prevY = turtle.position.y;
-  turtle.position.x += (target.x - turtle.position.x) * Math.min(1, 8 * dt);
-  turtle.position.y += (target.y - turtle.position.y) * Math.min(1, 8 * dt);
+  turtle.position.x += (target.x - turtle.position.x) * Math.min(1, 6 * dt);
+  turtle.position.y += (target.y - turtle.position.y) * Math.min(1, 6 * dt);
   turtle.position.y += Math.sin(t * 1.5) * 0.003; // gentle idle bob
   const vx = turtle.position.x - prevX, vy = turtle.position.y - prevY;
   turtle.rotation.z = THREE.MathUtils.lerp(turtle.rotation.z, -vx * 4, 0.15);
   turtle.rotation.x = THREE.MathUtils.lerp(turtle.rotation.x, vy * 3, 0.15);
 
-  // spacebar "happy wiggle" — a cheeky rhythmic thrust + bob, with a shout
+  // spacebar wiggle — fast, aggressive thrusting with a side shimmy, a scale
+  // pulse, and the tail curling down toward the belly. Plus the shout.
   const wiggling = t < humpUntil;
   if (wiggling) {
-    const p = Math.sin(t * 16);
-    turtle.position.z = 0.45 + p * 0.55;                 // thrust toward / away from camera
-    turtle.position.y += Math.abs(p) * 0.12;             // little hop on each beat
-    turtle.rotation.x = p * 0.4;                         // pelvic tilt
-  } else if (turtle.position.z !== 0) {
-    turtle.position.z += (0 - turtle.position.z) * Math.min(1, 8 * dt);
-    if (Math.abs(turtle.position.z) < 0.01) turtle.position.z = 0;
+    const p = Math.sin(t * 26);            // fast thrust
+    const q = Math.sin(t * 13);            // slower shimmy
+    turtle.position.z = 0.7 + p * 1.2;     // big lunge toward / away from camera
+    turtle.position.y += Math.abs(p) * 0.32;
+    turtle.rotation.x = p * 0.95;          // hard pelvic tilt
+    turtle.rotation.z = q * 0.45;          // side-to-side shimmy
+    turtle.rotation.y = Math.PI + q * 0.28;
+    turtle.scale.setScalar(1 + Math.abs(p) * 0.14);
+    // tail curls down and tucks forward toward the belly, wagging
+    tail.rotation.x = TAIL_BASE_X - 1.5 + p * 0.25;
+    tail.position.z = -1.7;
+    tail.position.y = -0.5;
+  } else {
+    if (turtle.position.z !== 0) {
+      turtle.position.z += (0 - turtle.position.z) * Math.min(1, 8 * dt);
+      if (Math.abs(turtle.position.z) < 0.01) turtle.position.z = 0;
+    }
+    turtle.rotation.y += (Math.PI - turtle.rotation.y) * Math.min(1, 10 * dt);
+    turtle.scale.x += (1 - turtle.scale.x) * Math.min(1, 10 * dt);
+    turtle.scale.y = turtle.scale.z = turtle.scale.x;
+    tail.rotation.x += (TAIL_BASE_X - tail.rotation.x) * Math.min(1, 8 * dt);
+    tail.position.z += (-2.12 - tail.position.z) * Math.min(1, 8 * dt);
+    tail.position.y += (-0.12 - tail.position.y) * Math.min(1, 8 * dt);
   }
   if (wiggling !== wiggleShown) {                         // toggle the "plane time baby!" shout
     wiggleText.style.display = wiggling ? 'block' : 'none';
     wiggleShown = wiggling;
+  }
+
+  // chomp — the beak snaps open and shut after Friday eats a jelly
+  if (t < chompUntil) {
+    beak.position.y = -0.18 - 0.32 * Math.abs(Math.sin(t * 34));
+  } else if (beak.position.y !== -0.18) {
+    beak.position.y += (-0.18 - beak.position.y) * Math.min(1, 12 * dt);
   }
 
   // grace-period shield: visible & pulsing while invulnerable at the start
@@ -660,7 +754,7 @@ function animate() {
   });
 
   if (running) {
-    speed += dt * 0.6;            // ramp difficulty
+    speed += dt * 0.35;           // ramp difficulty (gentler)
     score += dt * 10 + dt * speed; // distance + speed bonus
     scoreEl.textContent = Math.floor(score);
 
@@ -684,6 +778,39 @@ function animate() {
         const dy = bag.position.y - turtle.position.y;
         const hitR = TURTLE_R + 0.5 * bag.scale.x;
         if (dx * dx + dy * dy < hitR * hitR) { gameOver(); }
+      }
+    }
+
+    // moon jellies — drift toward Friday; swim into one to eat it (it pops)
+    for (const j of jellies) {
+      j.position.z += speed * dt;
+      j.rotation.y += 0.3 * dt;
+
+      if (j.userData.popping) {                 // pop: balloon out & fade, then recycle
+        const k = (t - j.userData.popT) / 0.32;
+        j.scale.setScalar(j.userData.baseScale * (1 + k * 1.6));
+        j.userData.bellMat.opacity = 0.45 * (1 - k);
+        j.userData.gonMat.opacity = 0.6 * (1 - k);
+        if (k >= 1) placeJelly(j, false);
+        continue;
+      }
+
+      j.userData.bell.scale.y = 1 + Math.sin(t * 3 + j.userData.phase) * 0.2;   // bell pulse
+      if (j.position.z > 12) { placeJelly(j, false); continue; }
+
+      // eat when overlapping the turtle
+      if (j.position.z > -1.5 && j.position.z < 1.5) {
+        const dx = j.position.x - turtle.position.x;
+        const dy = j.position.y - turtle.position.y;
+        const r = TURTLE_R + 1.2 * j.scale.x;
+        if (dx * dx + dy * dy < r * r) {
+          j.userData.popping = true;
+          j.userData.popT = t;
+          jelliesEaten++;
+          score += 25;
+          chompUntil = t + 0.45;
+          jelliesEl.textContent = jelliesEaten;
+        }
       }
     }
   }
