@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getModel } from './vendor/models.js';
 
 // ---------- Boot ----------
 const canvas = document.getElementById('c');
@@ -713,6 +714,248 @@ function setHat(id) {
   for (const key in hatMeshes) hatMeshes[key].visible = (key === id);
 }
 
+// =====================================================================
+// LOADOUT — a rack of weapons Friday can wield. Each builder returns a
+// Group modelled pointing +z (Friday's forward / head direction) and
+// gripped near its local origin. Weapons seat on `weaponAnchor`, parked
+// at the right front flipper so Friday looks like he's holding them.
+// =====================================================================
+const weaponAnchor = new THREE.Group();
+const WEAPON_BASE = new THREE.Vector3(1.2, 0.18, 1.6);   // raised on the right, gripped by the right flipper
+weaponAnchor.position.copy(WEAPON_BASE);
+weaponAnchor.scale.setScalar(1.3);
+turtle.add(weaponAnchor);
+
+const steelMat = new THREE.MeshStandardMaterial({ color: 0xdfe6ea, roughness: 0.22, metalness: 0.9 });
+
+// AK-47 — wood furniture, banana mag, long barrel, muzzle flash.
+function wepAK() {
+  const g = new THREE.Group();
+  const metal = hatMat(0x26262b, { rough: 0.45, metal: 0.6 });
+  const wood = hatMat(0x6b3f1d, { rough: 0.7 });
+  const rec = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.16, 0.66), metal);
+  rec.position.set(0, 0, 0.06); g.add(rec);
+  const barrel = cyl(0.032, 0.032, 0.82, metal, 12);
+  barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.03, 0.72); g.add(barrel);
+  const hand = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.34), wood);
+  hand.position.set(0, -0.01, 0.44); g.add(hand);
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.12, 0.42), wood);
+  stock.position.set(0, -0.03, -0.36); g.add(stock);
+  const mag = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.13), metal);
+  mag.position.set(0, -0.2, 0.16); mag.rotation.x = 0.34; g.add(mag);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.22, 0.09), metal);
+  grip.position.set(0, -0.16, -0.08); grip.rotation.x = -0.32; g.add(grip);
+  const sight = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.07, 0.02), metal);
+  sight.position.set(0, 0.13, 0.42); g.add(sight);
+  const flash = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.42, 10),
+    new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.95 }));
+  flash.rotation.x = -Math.PI / 2; flash.position.set(0, 0.03, 1.2); flash.visible = false;
+  g.add(flash);
+  g.userData.flash = flash;
+  g.userData.muzzle = new THREE.Vector3(0, 0.03, 1.18);
+  return g;
+}
+
+// Katana — wrapped grip, gold tsuba, long polished blade.
+function wepKatana() {
+  const g = new THREE.Group();
+  const wrap = hatMat(0x161618, { rough: 0.7 });
+  const gold = hatMat(0xd4af37, { metal: 0.6, rough: 0.3 });
+  const handle = cyl(0.04, 0.046, 0.34, wrap, 10);
+  handle.rotation.x = Math.PI / 2; handle.position.set(0, 0, -0.22); g.add(handle);
+  const guard = cyl(0.11, 0.11, 0.03, gold, 18);
+  guard.rotation.x = Math.PI / 2; guard.position.set(0, 0, -0.04); g.add(guard);
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.075, 1.12), steelMat);
+  blade.position.set(0, 0.02, 0.55); blade.rotation.x = -0.05; g.add(blade);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.2, 4), steelMat);
+  tip.rotation.x = Math.PI / 2; tip.position.set(0, 0.06, 1.2); tip.scale.set(0.45, 1, 1); g.add(tip);
+  g.userData.melee = true;
+  g.userData.muzzle = new THREE.Vector3(0, 0.04, 1.0);
+  return g;
+}
+
+// Taser — chunky yellow stun-gun with two prongs and an arc.
+function wepTaser() {
+  const g = new THREE.Group();
+  const yellow = hatMat(0xf4c20d, { rough: 0.5 });
+  const black = hatMat(0x161618, { rough: 0.6 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.34), yellow);
+  body.position.set(0, 0, 0.04); g.add(body);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.1), black);
+  grip.position.set(0, -0.16, -0.08); grip.rotation.x = -0.3; g.add(grip);
+  for (const sx of [-1, 1]) {
+    const prong = cyl(0.013, 0.013, 0.24, black, 6);
+    prong.rotation.x = Math.PI / 2; prong.position.set(sx * 0.035, 0.02, 0.32); g.add(prong);
+  }
+  const arc = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8),
+    new THREE.MeshBasicMaterial({ color: 0x8af0ff, transparent: true, opacity: 0.95 }));
+  arc.position.set(0, 0.02, 0.46); arc.visible = false; g.add(arc);
+  g.userData.flash = arc;
+  g.userData.muzzle = new THREE.Vector3(0, 0.02, 0.44);
+  return g;
+}
+
+// Shiv — taped grip, crude tapered blade.
+function wepShiv() {
+  const g = new THREE.Group();
+  const tape = hatMat(0x3a3a3a, { rough: 0.9 });
+  const handle = cyl(0.035, 0.042, 0.22, tape, 8);
+  handle.rotation.x = Math.PI / 2; handle.position.set(0, 0, -0.12); g.add(handle);
+  const blade = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.44, 4), steelMat);
+  blade.rotation.x = Math.PI / 2; blade.position.set(0, 0, 0.2); blade.scale.set(0.55, 1, 1); g.add(blade);
+  g.userData.melee = true;
+  g.userData.muzzle = new THREE.Vector3(0, 0, 0.42);
+  return g;
+}
+
+// Rocket launcher — green tube, rear flare, loaded warhead at the muzzle.
+function wepRocket() {
+  const g = new THREE.Group();
+  const green = hatMat(0x3a5a32, { rough: 0.7 });
+  const black = hatMat(0x161618, { rough: 0.6 });
+  const tube = cyl(0.11, 0.11, 1.0, green, 16);
+  tube.rotation.x = Math.PI / 2; tube.position.set(0, 0, 0.22); g.add(tube);
+  const rear = cyl(0.16, 0.1, 0.16, black, 16);
+  rear.rotation.x = Math.PI / 2; rear.position.set(0, 0, -0.34); g.add(rear);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.2, 0.09), black);
+  grip.position.set(0, -0.18, 0.0); grip.rotation.x = -0.2; g.add(grip);
+  const sight = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.1, 0.02), black);
+  sight.position.set(0, 0.17, 0.28); g.add(sight);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 12), hatMat(0xb5402f, { rough: 0.5 }));
+  head.rotation.x = Math.PI / 2; head.position.set(0, 0, 0.88); g.add(head);
+  g.userData.warhead = head;
+  g.userData.muzzle = new THREE.Vector3(0, 0, 1.02);
+  g.userData.rocket = true;
+  return g;
+}
+
+const WEAPONS = [
+  { id: 'none', name: 'Unarmed', icon: '🚫', build: null, kind: 'none' },
+  { id: 'ak47', name: 'AK-47', icon: '🔫', build: wepAK, kind: 'gun', dmg: 3, cooldown: 0.1, range: 48 },
+  { id: 'katana', name: 'Katana', icon: '🗡️', build: wepKatana, kind: 'melee', dmg: 7, cooldown: 0.4, range: 6.5 },
+  { id: 'taser', name: 'Taser', icon: '⚡', build: wepTaser, kind: 'gun', dmg: 5, cooldown: 0.55, range: 16 },
+  { id: 'shiv', name: 'Shiv', icon: '🔪', build: wepShiv, kind: 'melee', dmg: 4, cooldown: 0.28, range: 5 },
+  { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', build: wepRocket, kind: 'rocket', dmg: 200, cooldown: 1.3, range: 80, splash: 9 },
+];
+const weaponMeshes = {};
+for (const w of WEAPONS) {
+  if (!w.build) continue;
+  const m = w.build();
+  m.visible = false;
+  weaponAnchor.add(m);
+  weaponMeshes[w.id] = m;
+}
+let currentWeapon = 'none';
+let currentWeaponSpec = WEAPONS[0];
+function setWeapon(id) {
+  currentWeapon = id;
+  currentWeaponSpec = WEAPONS.find((w) => w.id === id) || WEAPONS[0];
+  for (const key in weaponMeshes) weaponMeshes[key].visible = (key === id);
+  resetWeaponPose();
+}
+function resetWeaponPose() {
+  weaponAnchor.position.copy(WEAPON_BASE);
+  weaponAnchor.rotation.set(currentWeaponSpec.kind === 'melee' ? 0.35 : 0.0, 0, 0);
+}
+
+// ---------- Combat: projectiles, tracers, explosions, burgers ----------
+const playerFwd = new THREE.Vector3(0, 0, 1);
+let firing = false;          // mouse / touch held
+let lastShot = -10;          // time of last shot/swing
+let swingT = -10;            // time the current melee swing began
+let sharksDefeated = 0, burgersCollected = 0;
+
+// reusable bullet tracers
+const tracerGeo = new THREE.CylinderGeometry(0.02, 0.02, 1, 6);
+const tracerMat = new THREE.MeshBasicMaterial({ color: 0xfff1a0, transparent: true, opacity: 0.9 });
+const tracers = [];
+for (let i = 0; i < 6; i++) {
+  const tr = new THREE.Mesh(tracerGeo, tracerMat.clone());
+  tr.visible = false; scene.add(tr); tracers.push({ mesh: tr, until: 0 });
+}
+const _yUp = new THREE.Vector3(0, 1, 0);
+function showTracer(a, b, t) {
+  const slot = tracers.find((s) => t > s.until) || tracers[0];
+  const dir = b.clone().sub(a); const len = Math.max(0.1, dir.length());
+  slot.mesh.position.copy(a).addScaledVector(dir, 0.5);
+  slot.mesh.scale.set(1, len, 1);
+  slot.mesh.quaternion.setFromUnitVectors(_yUp, dir.normalize());
+  slot.mesh.visible = true; slot.until = t + 0.05;
+}
+
+// reusable explosions (expanding fading sphere)
+const explosions = [];
+for (let i = 0; i < 4; i++) {
+  const ex = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0 }));
+  ex.visible = false; scene.add(ex);
+  explosions.push({ mesh: ex, t0: -10 });
+}
+function boom(pos, t) {
+  const slot = explosions.find((s) => t - s.t0 > 0.5) || explosions[0];
+  slot.mesh.position.copy(pos); slot.mesh.t0 = t; slot.t0 = t; slot.mesh.visible = true;
+}
+
+// rocket projectiles
+const rockets = [];
+for (let i = 0; i < 5; i++) {
+  const r = new THREE.Group();
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.4, 10), hatMat(0xb5402f, { rough: 0.5 }));
+  r.add(cone);
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.85 }));
+  flame.position.y = -0.4; flame.rotation.x = Math.PI; r.add(flame);
+  r.visible = false; scene.add(r);
+  rockets.push({ grp: r, vel: new THREE.Vector3(), dist: 0, active: false });
+}
+function fireRocket(origin, dir, t) {
+  const r = rockets.find((x) => !x.active); if (!r) return;
+  r.grp.position.copy(origin);
+  r.vel.copy(dir).multiplyScalar(40);
+  r.grp.quaternion.setFromUnitVectors(_yUp, dir.clone().normalize());
+  r.dist = 0; r.active = true; r.grp.visible = true;
+}
+
+// cheeseburger drops
+function makeBurger() {
+  const g = new THREE.Group();
+  const bun = hatMat(0xd98a3a, { rough: 0.8 });
+  const bottom = cyl(0.32, 0.28, 0.16, bun, 18);
+  bottom.position.y = -0.16; g.add(bottom);
+  const patty = cyl(0.36, 0.36, 0.12, hatMat(0x4a2c17, { rough: 0.85 }), 18);
+  patty.position.y = -0.05; g.add(patty);
+  const cheese = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.035, 0.6), hatMat(0xf3b73b, { rough: 0.5 }));
+  cheese.position.y = 0.01; cheese.rotation.y = Math.PI / 4; g.add(cheese);
+  const lettuce = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.06, 6, 18), hatMat(0x6fb43a, { rough: 0.85 }));
+  lettuce.rotation.x = Math.PI / 2; lettuce.position.y = 0.05; g.add(lettuce);
+  const top = new THREE.Mesh(new THREE.SphereGeometry(0.33, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), bun);
+  top.position.y = 0.07; top.scale.y = 0.82; g.add(top);
+  const ses = hatMat(0xf4e3b0, { rough: 0.6 });
+  for (let i = 0; i < 7; i++) {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(0.024, 6, 6), ses);
+    const a = Math.random() * Math.PI * 2, r = 0.05 + Math.random() * 0.18;
+    s.position.set(Math.cos(a) * r, 0.07 + Math.sqrt(Math.max(0, 1 - (r / 0.33) ** 2)) * 0.24, Math.sin(a) * r);
+    g.add(s);
+  }
+  g.scale.setScalar(0.9);
+  g.visible = false;
+  return g;
+}
+const BURGER_POOL = 10;
+const burgers = [];
+for (let i = 0; i < BURGER_POOL; i++) {
+  const b = makeBurger();
+  b.userData = { active: false, t0: 0, bob: 0, baseY: 0 };
+  scene.add(b); burgers.push(b);
+}
+function spawnBurger(pos, t) {
+  const b = burgers.find((x) => !x.userData.active); if (!b) return;
+  b.position.copy(pos);
+  b.userData.active = true; b.userData.t0 = t;
+  b.userData.bob = Math.random() * Math.PI * 2; b.userData.baseY = pos.y;
+  b.scale.setScalar(0.001); b.visible = true;
+}
+
 turtle.rotation.y = Math.PI; // face into the screen (-z)
 
 // ---------- Wardrobe turntable ----------
@@ -913,123 +1156,70 @@ for (let i = 0; i < GRASS_N; i++) {
   scene.add(cl);
 }
 
-// ---------- Sharks ----------
-// Distinct low-poly shark species that cruise through the background now and
-// then: 1 zebra shark ("Zeus"), 3 sand tiger, 3 nurse, 2 sandbar. Each swims
-// along +x (snout forward) and is flipped for the other direction.
-function makeFinGeo(w, h, depth = 0.06) {
-  const s = new THREE.Shape();
-  s.moveTo(0, 0); s.lineTo(w, 0); s.lineTo(w * 0.25, h); s.closePath();
-  const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false });
-  g.translate(0, 0, -depth / 2);
-  return g;
-}
-function makeTailGeo(len, up, low, depth = 0.06) {
-  const s = new THREE.Shape();
-  s.moveTo(0, 0); s.lineTo(-len, up); s.lineTo(-len * 0.55, up * 0.18); s.lineTo(-len * 0.78, -low); s.closePath();
-  const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false });
-  g.translate(0, 0, -depth / 2);
-  return g;
-}
-function makeLabelSprite(text) {
-  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
-  const x = cv.getContext('2d');
-  x.font = 'bold 70px Segoe UI, Tahoma, sans-serif';
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.lineWidth = 10; x.strokeStyle = 'rgba(0,0,0,0.65)'; x.strokeText(text, 128, 64);
-  x.fillStyle = '#ffef6e'; x.fillText(text, 128, 64);
-  const tex = new THREE.CanvasTexture(cv);
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
-  sp.scale.set(2.4, 1.2, 1);
-  return sp;
-}
-
-function buildShark(spec) {
-  const g = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({ color: spec.color, roughness: 0.75, flatShading: true });
-  const bellyMat = new THREE.MeshStandardMaterial({ color: spec.belly, roughness: 0.85, flatShading: true });
-  const L = spec.length, G = spec.girth;
-
-  const body = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), bodyMat);
-  body.scale.set(L * 0.5, L * 0.16 * G, L * 0.13 * G);
-  g.add(body);
-  const belly = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), bellyMat);
-  belly.scale.set(L * 0.46, L * 0.10 * G, L * 0.11 * G);
-  belly.position.y = -L * 0.06 * G;
-  g.add(belly);
-
-  if (spec.pointy) {
-    const snout = new THREE.Mesh(new THREE.ConeGeometry(L * 0.12 * G, L * 0.34, 12), bodyMat);
-    snout.rotation.z = -Math.PI / 2; snout.position.x = L * 0.52;
-    g.add(snout);
-  } else {
-    const snout = new THREE.Mesh(new THREE.SphereGeometry(L * 0.14 * G, 12, 10), bodyMat);
-    snout.scale.set(1.15, 0.85, 1.05); snout.position.x = L * 0.46;
-    g.add(snout);
-  }
-  if (spec.barbels) {                       // nurse shark whisker barbels
-    for (const sx of [-1, 1]) {
-      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.015, 0.45, 5), bellyMat);
-      b.rotation.z = Math.PI / 2.3; b.position.set(L * 0.52, -L * 0.07, sx * 0.12);
-      g.add(b);
-    }
-  }
-
-  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a });
-  for (const sx of [-1, 1]) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(L * 0.028, 8, 8), eyeMat);
-    e.position.set(L * 0.4, L * 0.03, sx * L * 0.1 * G);
-    g.add(e);
-  }
-
-  const d1 = new THREE.Mesh(makeFinGeo(L * 0.24, spec.dorsal1 * L), bodyMat);
-  d1.position.set(L * 0.06, L * 0.14 * G, 0); g.add(d1);
-  if (spec.dorsal2) {
-    const d2 = new THREE.Mesh(makeFinGeo(L * 0.17, spec.dorsal2 * L), bodyMat);
-    d2.position.set(-L * 0.24, L * 0.13 * G, 0); g.add(d2);
-  }
-  for (const sx of [-1, 1]) {               // pectoral fins
-    const p = new THREE.Mesh(makeFinGeo(L * 0.22, L * 0.18), bodyMat);
-    p.position.set(L * 0.2, -L * 0.05, sx * L * 0.1 * G);
-    p.rotation.x = sx * Math.PI / 2; p.rotation.y = sx * -0.6; p.rotation.z = -0.25;
-    g.add(p);
-  }
-
-  const tail = new THREE.Mesh(makeTailGeo(L * 0.32, spec.tailUp * L, spec.tailLow * L), bodyMat);
-  tail.position.set(-L * 0.5, 0, 0); g.add(tail);
-
-  if (spec.spots) {                          // zebra shark adult spotting
-    const spotMat = new THREE.MeshStandardMaterial({ color: 0x4a3a1e, roughness: 0.7 });
-    for (let i = 0; i < 26; i++) {
-      const sp = new THREE.Mesh(new THREE.SphereGeometry(L * 0.024, 6, 6), spotMat);
-      const ang = Math.random() * Math.PI - Math.PI / 2;
-      sp.position.set((Math.random() - 0.45) * L * 0.85,
-        Math.sin(ang) * L * 0.15 * G, Math.cos(ang) * L * 0.13 * G);
-      sp.scale.set(1, 0.4, 1);
-      g.add(sp);
-    }
-  }
-  if (spec.name) {
-    const label = makeLabelSprite(spec.name);
-    label.position.set(0, L * 0.34, 0);
-    g.add(label);
-  }
-
-  g.userData.tail = tail;
-  return g;
+// ---------- Loaded OBJ models (shark + fish pack) ----------
+// The uploaded Blender meshes are baked into vendor/models.js (positions only,
+// normalized so the longest axis spans 1.0, length along +z). Each instance
+// gets its own materials so it can carry an independent "swimming" wiggle —
+// a vertex displacement injected via onBeforeCompile that bends the body
+// side-to-side along its length, standing in for skeletal animation.
+const swimMats = [];   // every swim material, time-driven from the main loop
+function makeSwimMat(color, opts) {
+  const m = new THREE.MeshStandardMaterial({
+    color, roughness: opts.rough ?? 0.7, metalness: 0.0, side: THREE.DoubleSide
+  });
+  m.userData.phase = opts.phase ?? Math.random() * Math.PI * 2;
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = { value: 0 };
+    shader.uniforms.uPhase = { value: m.userData.phase };
+    shader.uniforms.uAmp = { value: opts.amp ?? 0.07 };
+    shader.uniforms.uWaves = { value: opts.waves ?? 5.5 };
+    shader.uniforms.uSpeed = { value: opts.speed ?? 6.0 };
+    shader.vertexShader = 'uniform float uTime, uPhase, uAmp, uWaves, uSpeed;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>',
+      `#include <begin_vertex>
+       float swZ = transformed.z;            // length axis (model space)
+       float swTail = clamp(0.5 - swZ, 0.0, 1.0);   // sway grows toward the tail
+       transformed.x += uAmp * sin(swZ * uWaves + uTime * uSpeed + uPhase) * swTail;`);
+    m.userData.shader = shader;
+  };
+  swimMats.push(m);
+  return m;
 }
 
-const SHARK_SPECS = [
-  { key: 'zebra', name: 'Zeus', count: 1, length: 4.6, girth: 0.9, color: 0xc2a25e, belly: 0xe6dcb8, pointy: false, dorsal1: 0.18, dorsal2: 0.10, tailUp: 0.52, tailLow: 0.12, spots: true },
-  { key: 'sandtiger', count: 3, length: 5.0, girth: 1.05, color: 0x9a9384, belly: 0xd8d2c2, pointy: true, dorsal1: 0.2, dorsal2: 0.18, tailUp: 0.32, tailLow: 0.18 },
-  { key: 'nurse', count: 3, length: 4.6, girth: 1.18, color: 0x6e5a3a, belly: 0xb9a784, pointy: false, barbels: true, dorsal1: 0.14, dorsal2: 0.12, tailUp: 0.42, tailLow: 0.08 },
-  { key: 'sandbar', count: 2, length: 4.2, girth: 0.95, color: 0x808d96, belly: 0xdfe6ea, pointy: true, dorsal1: 0.3, dorsal2: 0.08, tailUp: 0.34, tailLow: 0.2 },
-];
+// Build one instance of a baked model, oriented so its nose points +x (the
+// game's forward) and scaled to a target world length. Returns the holder
+// Group plus the material list (for tinting / hit-flash).
+function instantiateModel(name, opts) {
+  const data = getModel(name);
+  const holder = new THREE.Group();
+  const inner = new THREE.Group();
+  const mats = [];
+  for (const part of data.parts) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(part.positions, 3));
+    geo.computeVertexNormals();
+    const isEye = /eye/i.test(part.material);
+    const color = isEye ? 0x101014 : (opts.colorFor ? opts.colorFor(part.material) : opts.color);
+    const mat = makeSwimMat(color, { ...opts, rough: isEye ? 0.3 : opts.rough });
+    mats.push(mat);
+    inner.add(new THREE.Mesh(geo, mat));
+  }
+  inner.rotation.y = opts.flip ? -Math.PI / 2 : Math.PI / 2;   // +z (length) → +x
+  inner.scale.setScalar(opts.length);
+  holder.add(inner);
+  holder.userData.mats = mats;
+  holder.userData.len = opts.length;
+  return holder;
+}
+
+// ---------- Enemy sharks (the bad guys) ----------
+const SHARK_LEN = 5.0;
+const SHARK_COUNT = 6;
 const sharks = [];
 function launchShark(shark) {
   const th = Math.random() * Math.PI * 2;          // heading across the world
   shark.userData.dirA = th;
-  shark.userData.speed = 1.8 + Math.random() * 2.6;
+  shark.userData.speed = 1.8 + Math.random() * 2.2;
   shark.userData.bob = Math.random() * Math.PI * 2;
   const start = -1.2 * WORLD_R;
   shark.position.set(
@@ -1037,18 +1227,192 @@ function launchShark(shark) {
     Y_MIN + 2 + Math.random() * (Y_MAX - Y_MIN - 3),
     Math.sin(th) * start + (Math.random() - 0.5) * 24
   );
-  shark.rotation.set(0, -th, 0);                    // model faces +x → aim along heading
-  shark.scale.setScalar(0.85 + Math.random() * 0.5);
+  shark.rotation.set(0, -th, 0);                    // holder faces +x → aim along heading
+  shark.scale.setScalar(0.8 + Math.random() * 0.5);
   shark.visible = true;
+  shark.userData.alive = true;
+  shark.userData.hp = shark.userData.maxHp;
+  shark.userData.hitFlash = -10;
+  shark.userData.respawnAt = 0;
 }
-for (const spec of SHARK_SPECS) {
-  for (let i = 0; i < spec.count; i++) {
-    const s = buildShark(spec);
-    s.userData.phase = Math.random() * Math.PI * 2;
-    sharks.push(s);
-    scene.add(s);
-    launchShark(s);
+for (let i = 0; i < SHARK_COUNT; i++) {
+  const s = instantiateModel('shark', {
+    length: SHARK_LEN, color: 0x6b7884, rough: 0.7,
+    amp: 0.05, waves: 4.5, speed: 5.0,
+  });
+  s.userData.maxHp = Math.round(SHARK_LEN * 2);     // tougher than a quick kill
+  s.userData.phase = Math.random() * Math.PI * 2;
+  sharks.push(s);
+  scene.add(s);
+  launchShark(s);
+}
+
+// ---------- Ambient fish (peaceful background life) ----------
+const FISH_TYPES = [
+  { name: 'fish01', palette: [0xffb14a, 0xff7b3a, 0xfff0c2] },   // clownfish-ish
+  { name: 'fish02', palette: [0x4fc3f7, 0x2a73c0, 0xeaf6ff] },   // blue tang-ish
+  { name: 'fish03', palette: [0x8bd450, 0x4a9e3a, 0xfff6a0] },   // green wrasse-ish
+];
+const fishes = [];
+function launchFish(fish) {
+  const th = Math.random() * Math.PI * 2;
+  fish.userData.dirA = th;
+  fish.userData.turn = (Math.random() - 0.5) * 0.3;
+  fish.userData.speed = 1.2 + Math.random() * 1.8;
+  fish.userData.bob = Math.random() * Math.PI * 2;
+  randWorldPos(fish.position);
+  fish.rotation.set(0, -th, 0);
+}
+const FISH_COUNT = 26;
+for (let i = 0; i < FISH_COUNT; i++) {
+  const type = FISH_TYPES[i % FISH_TYPES.length];
+  const pal = type.palette;
+  let pi = 0;
+  const f = instantiateModel(type.name, {
+    length: 0.7 + Math.random() * 0.7,
+    rough: 0.6, amp: 0.12, waves: 6.5, speed: 8.0 + Math.random() * 3,
+    colorFor: (mat) => pal[(pi++) % pal.length],
+  });
+  launchFish(f);
+  fishes.push(f);
+  scene.add(f);
+}
+
+// ---------- Combat helpers ----------
+const AGGRO_R = 17;          // sharks notice Friday within this range
+const SHARK_CHASE = 7.5;     // chase speed (below Friday's 14 top speed → escapable)
+function sharkRadius(s) { return s.userData.len * 0.42 * s.scale.x; }
+function steerAngle(cur, target, max) {        // rotate `cur` toward `target`, capped
+  let d = target - cur;
+  d = Math.atan2(Math.sin(d), Math.cos(d));
+  return cur + Math.max(-max, Math.min(max, d));
+}
+
+function damageShark(shark, dmg, t) {
+  if (!shark.userData.alive) return;
+  shark.userData.hp -= dmg;
+  shark.userData.hitFlash = t;
+  if (shark.userData.hp <= 0) killShark(shark, t);
+}
+function killShark(shark, t) {
+  shark.userData.alive = false;
+  shark.userData.respawnAt = t + 5;
+  shark.visible = false;
+  sharksDefeated++;
+  score += 40;
+  spawnBurger(shark.position, t);
+  boom(shark.position, t);     // little death puff
+}
+
+// world-space muzzle point + forward direction of the equipped weapon
+const _muzzle = new THREE.Vector3(), _aim = new THREE.Vector3();
+function weaponMuzzle(out) {
+  const mesh = weaponMeshes[currentWeapon];
+  if (mesh && mesh.userData.muzzle) out.copy(mesh.userData.muzzle), mesh.localToWorld(out);
+  else out.copy(player.pos).addScaledVector(playerFwd, 1.5);
+  return out;
+}
+
+function tryFire(t) {
+  const w = currentWeaponSpec;
+  if (w.kind === 'none') return;
+  if (t - lastShot < w.cooldown) return;
+  lastShot = t;
+  _aim.copy(playerFwd).normalize();
+  weaponMuzzle(_muzzle);
+  if (w.kind === 'melee') { swingT = t; meleeSwing(w, t); }
+  else if (w.kind === 'rocket') fireRocket(_muzzle, _aim, t);
+  else hitscan(w, t);
+}
+
+// pick the closest shark whose centre lies near the aim ray, damage it
+function hitscan(w, t) {
+  let best = null, bestProj = Infinity, bestPoint = null;
+  const to = new THREE.Vector3();
+  for (const s of sharks) {
+    if (!s.userData.alive) continue;
+    to.copy(s.position).sub(player.pos);
+    const proj = to.dot(_aim);
+    if (proj < 0 || proj > w.range) continue;
+    const perp = to.addScaledVector(_aim, -proj).length();
+    if (perp > sharkRadius(s) + 0.5) continue;
+    if (proj < bestProj) { bestProj = proj; best = s; bestPoint = s.position.clone(); }
   }
+  const end = best ? bestPoint : _muzzle.clone().addScaledVector(_aim, w.range);
+  showTracer(_muzzle, end, t);
+  if (best) damageShark(best, w.dmg, t);
+}
+
+// damage every shark inside a wide frontal arc within reach
+function meleeSwing(w, t) {
+  const to = new THREE.Vector3();
+  for (const s of sharks) {
+    if (!s.userData.alive) continue;
+    to.copy(s.position).sub(player.pos);
+    const dist = to.length();
+    if (dist > w.range + sharkRadius(s)) continue;
+    if (to.normalize().dot(_aim) < 0.4) continue;
+    damageShark(s, w.dmg, t);
+  }
+}
+
+// recoil / swing pose + muzzle-flash visibility (called each play frame)
+function updateWeapon(dt, t) {
+  const w = currentWeaponSpec;
+  if (w.kind === 'none') return;
+  if ((firing || keys['f']) && running && mode === 'play') tryFire(t);
+
+  const mesh = weaponMeshes[currentWeapon];
+  if (mesh.userData.flash) mesh.userData.flash.visible = (t - lastShot) < 0.05;
+  if (mesh.userData.warhead) mesh.userData.warhead.visible = (t - lastShot) > 0.4;  // reload
+
+  if (w.kind === 'melee') {
+    const k = (t - swingT) / 0.26;
+    if (k < 1) {
+      const s = Math.sin(k * Math.PI);              // chop down and back
+      weaponAnchor.rotation.x = 0.35 - s * 1.7;
+      weaponAnchor.rotation.z = -s * 0.5;
+    } else {
+      weaponAnchor.rotation.x += (0.35 - weaponAnchor.rotation.x) * Math.min(1, 12 * dt);
+      weaponAnchor.rotation.z += (0 - weaponAnchor.rotation.z) * Math.min(1, 12 * dt);
+    }
+  } else {
+    const k = (t - lastShot) / (w.cooldown * 0.6 + 0.05);
+    const kick = k < 1 ? (1 - k) * (w.kind === 'rocket' ? 0.22 : 0.13) : 0;
+    weaponAnchor.position.z = WEAPON_BASE.z - kick;
+    weaponAnchor.rotation.x = -kick * 0.7;
+  }
+}
+
+// advance rockets, explosions, tracers and burgers
+function updateOrdnance(dt, t) {
+  for (const r of rockets) {
+    if (!r.active) continue;
+    r.grp.position.addScaledVector(r.vel, dt);
+    r.dist += r.vel.length() * dt;
+    let hit = !running;
+    for (const s of sharks) {
+      if (!s.userData.alive) continue;
+      if (r.grp.position.distanceTo(s.position) < sharkRadius(s) + 0.5) { hit = true; break; }
+    }
+    if (hit || r.dist > currentWeaponSpec.range || r.grp.position.y < FLOOR_Y) {
+      const splash = 9;
+      for (const s of sharks) {
+        if (s.userData.alive && r.grp.position.distanceTo(s.position) < splash)
+          damageShark(s, 200, t);
+      }
+      boom(r.grp.position, t);
+      r.active = false; r.grp.visible = false;
+    }
+  }
+  for (const e of explosions) {
+    const k = (t - e.t0) / 0.45;
+    if (k >= 1) { e.mesh.visible = false; continue; }
+    e.mesh.visible = true;
+    e.mesh.scale.setScalar(0.4 + k * 5);
+    e.mesh.material.opacity = 0.7 * (1 - k);
+  }
+  for (const tr of tracers) if (tr.mesh.visible && t > tr.until) tr.mesh.visible = false;
 }
 
 // ---------- Input (free-swim look + thrust) ----------
@@ -1071,10 +1435,14 @@ window.addEventListener('mousemove', (e) => {
   mouseYaw -= (e.movementX || 0) * 0.0022;
   mousePitch -= (e.movementY || 0) * 0.0022;
 });
+// fire: hold left mouse (or F) to attack
+window.addEventListener('mousedown', (e) => { if (e.button === 0) firing = true; });
+window.addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; });
 // touch look (drag)
 let lastTouch = null;
 window.addEventListener('touchstart', (e) => {
   lastTouch = e.touches[0] ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+  if (mode === 'play' && running) firing = true;   // tap/hold to attack
 });
 window.addEventListener('touchmove', (e) => {
   if (mode !== 'play' || !running || !e.touches[0]) return;
@@ -1085,7 +1453,7 @@ window.addEventListener('touchmove', (e) => {
   lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   e.preventDefault();
 }, { passive: false });
-window.addEventListener('touchend', () => { lastTouch = null; });
+window.addEventListener('touchend', () => { lastTouch = null; firing = false; });
 
 // ---------- Game state ----------
 let running = false;
@@ -1100,6 +1468,8 @@ const _desired = new THREE.Vector3(), _look = new THREE.Vector3();
 const scoreEl = document.getElementById('score');
 const livesEl = document.getElementById('lives');
 const jelliesEl = document.getElementById('jellies');
+const burgersEl = document.getElementById('burgers');
+const crosshair = document.getElementById('crosshair');
 const panel = document.getElementById('panel');
 const hud = document.getElementById('hud');
 const msg = document.getElementById('msg');
@@ -1115,6 +1485,8 @@ function enterWardrobe() {
   running = false;
   bags.forEach((b) => (b.visible = false));
   jellies.forEach((j) => (j.visible = false));
+  burgers.forEach((b) => { b.userData.active = false; b.visible = false; });
+  firing = false;
   panel.classList.add('hidden');
   hud.style.display = 'none';
   wardrobe.classList.remove('hidden');
@@ -1125,12 +1497,16 @@ function startGame() {
   score = 0; jelliesEaten = 0; lives = MAX_LIVES;
   player.pos.set(0, 4, 0); player.yaw = 0; player.pitch = 0; player.speed = 0;
   mouseYaw = 0; mousePitch = 0; bankCur = 0;
+  firing = false; sharksDefeated = 0; burgersCollected = 0;
   turtle.scale.setScalar(1);
   bags.forEach((b) => { b.visible = true; placeBag(b, player.pos); });
   jellies.forEach((j) => { j.visible = true; placeJelly(j, player.pos); });
+  burgers.forEach((b) => { b.userData.active = false; b.visible = false; });
+  sharks.forEach(launchShark);   // fresh, full-health sharks each run
   graceUntil = clock.elapsedTime + GRACE;
   scoreEl.textContent = '0';
   jelliesEl.textContent = '0';
+  burgersEl.textContent = '0';
   livesEl.textContent = hearts(lives);
   wardrobe.classList.add('hidden');
   panel.classList.add('hidden');
@@ -1141,7 +1517,7 @@ function startGame() {
 function gameOver() {
   running = false;
   hud.style.display = 'none';
-  msg.innerHTML = `Friday's out of lives! 🛑<br><br>You explored the reef, gobbled <strong>${jelliesEaten}</strong> moon jellies and scored <strong>${Math.floor(score)}</strong>. Marine litter is a real threat to sea turtles — thanks for steering Friday clear of it!`;
+  msg.innerHTML = `Friday's out of lives! 🛑<br><br>You gobbled <strong>${jelliesEaten}</strong> moon jellies, took down <strong>${sharksDefeated}</strong> sharks 🦈, scoffed <strong>${burgersCollected}</strong> cheeseburgers 🍔 and scored <strong>${Math.floor(score)}</strong>. Marine litter is a real threat to sea turtles — thanks for steering Friday clear of it!`;
   playBtn.textContent = 'Swim Again';
   panel.classList.remove('hidden');
 }
@@ -1162,6 +1538,20 @@ HATS.forEach((h) => {
     rack.querySelectorAll('.hat-btn').forEach((b) => b.classList.toggle('selected', b === btn));
   });
   rack.appendChild(btn);
+});
+
+// ---------- Build the loadout rack UI ----------
+const wrack = document.getElementById('weapon-rack');
+WEAPONS.forEach((w) => {
+  const btn = document.createElement('button');
+  btn.className = 'hat-btn' + (w.id === 'none' ? ' selected' : '');
+  btn.dataset.id = w.id;
+  btn.innerHTML = `<span class="hat-ico">${w.icon}</span><span class="hat-name">${w.name}</span>`;
+  btn.addEventListener('click', () => {
+    setWeapon(w.id);
+    wrack.querySelectorAll('.hat-btn').forEach((b) => b.classList.toggle('selected', b === btn));
+  });
+  wrack.appendChild(btn);
 });
 
 // ---------- Loop ----------
@@ -1196,10 +1586,20 @@ function animate() {
     haloHat.userData.halo.rotation.z += dt * 0.5;
   }
 
-  // flipper flap (both modes; faster while swimming)
+  // drive the swimming wiggle on every loaded fish/shark material
+  for (const m of swimMats) if (m.userData.shader) m.userData.shader.uniforms.uTime.value = t;
+
+  // flipper flap (both modes; faster while swimming). The right front flipper
+  // holds a forward "grip" pose when Friday is carrying a weapon.
   const flapSpd = inWardrobe ? 2 : 6, flapAmp = inWardrobe ? 0.25 : 0.45;
+  const armed = currentWeapon !== 'none';
   flippers.forEach((f, i) => {
-    f.pivot.rotation.z = Math.sin(t * flapSpd + (i % 2) * Math.PI) * flapAmp * (f.x < 0 ? 1 : -1);
+    if (armed && f.front && f.side > 0) {   // right front flipper reaches up/forward to grip
+      f.pivot.rotation.set(-0.25, -1.2, 0.15 + Math.sin(t * 4) * 0.04);
+    } else {
+      const z = Math.sin(t * flapSpd + (i % 2) * Math.PI) * flapAmp * (f.x < 0 ? 1 : -1);
+      f.pivot.rotation.set(0, f.baseY, z);
+    }
   });
 
   if (inWardrobe) {
@@ -1211,12 +1611,15 @@ function animate() {
     turtle.scale.setScalar(1);
     tail.rotation.x = TAIL_BASE_X; tail.position.set(0, -0.12, -2.12);
     beak.position.y = -0.18; shield.visible = false;
+    resetWeaponPose();
+    crosshair.style.display = 'none';
     renderAmbient(dt, t);
     renderer.render(scene, camera);
     return;
   }
 
   if (running) updatePlay(dt, t);
+  crosshair.style.display = (running && armed) ? 'block' : 'none';
   renderAmbient(dt, t);
   renderer.render(scene, camera);
 }
@@ -1246,6 +1649,7 @@ function updatePlay(dt, t) {
   // move along the heading
   const cp = Math.cos(player.pitch), sp = Math.sin(player.pitch);
   const fwd = new THREE.Vector3(Math.sin(player.yaw) * cp, sp, Math.cos(player.yaw) * cp);
+  playerFwd.copy(fwd);
   player.pos.addScaledVector(fwd, player.speed * dt);
   const horiz = Math.hypot(player.pos.x, player.pos.z);
   if (horiz > WORLD_R) { const k = WORLD_R / horiz; player.pos.x *= k; player.pos.z *= k; }
@@ -1324,6 +1728,27 @@ function updatePlay(dt, t) {
     }
   }
 
+  // cheeseburgers dropped by defeated sharks — swim over one to scoff it
+  // (+points, and it heals a lost life). They float up and fade if left.
+  for (const b of burgers) {
+    if (!b.userData.active) continue;
+    const age = t - b.userData.t0;
+    if (age > 14) { b.userData.active = false; b.visible = false; continue; }
+    b.scale.setScalar(0.9 * Math.min(1, age / 0.3));
+    b.position.y = b.userData.baseY + 0.4 + Math.sin(t * 1.5 + b.userData.bob) * 0.25;
+    b.rotation.y += dt * 1.2;
+    if (b.position.distanceTo(player.pos) < TURTLE_R + 0.9) {
+      b.userData.active = false; b.visible = false;
+      burgersCollected++; score += 60; chompUntil = t + 0.45;
+      if (lives < MAX_LIVES) { lives++; livesEl.textContent = hearts(lives); }
+      burgersEl.textContent = burgersCollected;
+    }
+  }
+
+  // weapons: pose/recoil + firing, then advance any rockets/effects
+  updateWeapon(dt, t);
+  updateOrdnance(dt, t);
+
   score += dt * 3;
   scoreEl.textContent = Math.floor(score);
 }
@@ -1336,12 +1761,51 @@ function renderAmbient(dt, t) {
     }
   }
 
+  // peaceful fish — gentle roamers that wander and turn back at the edge
+  for (const fish of fishes) {
+    const fd = fish.userData;
+    fd.dirA += fd.turn * dt;
+    fish.position.x += Math.cos(fd.dirA) * fd.speed * dt;
+    fish.position.z += Math.sin(fd.dirA) * fd.speed * dt;
+    fish.position.y += Math.sin(t * 0.8 + fd.bob) * 0.01;
+    if (Math.hypot(fish.position.x, fish.position.z) > WORLD_R) {
+      fd.dirA = Math.atan2(-fish.position.z, -fish.position.x);   // head back inward
+    }
+    fish.rotation.set(0, -fd.dirA, 0);
+  }
+
+  // enemy sharks — roam the reef, but hunt Friday while a run is on
+  const inGrace = t < graceUntil;
   for (const shark of sharks) {
-    const th = shark.userData.dirA;
-    shark.position.x += Math.cos(th) * shark.userData.speed * dt;
-    shark.position.z += Math.sin(th) * shark.userData.speed * dt;
-    shark.position.y += Math.sin(t * 1.0 + shark.userData.bob) * 0.006;
-    shark.userData.tail.rotation.y = Math.sin(t * 5 + shark.userData.phase) * 0.5;
+    const sd = shark.userData;
+    if (!sd.alive) {
+      if (t > sd.respawnAt) launchShark(shark);
+      else continue;
+    }
+    // red hit-flash when shot, fading out
+    const fl = Math.max(0, 1 - (t - sd.hitFlash) / 0.18);
+    for (const m of sd.mats) m.emissive.setRGB(fl * 0.8, 0, 0);
+
+    let speed = sd.speed;
+    if (running && mode === 'play') {
+      const dx = player.pos.x - shark.position.x, dz = player.pos.z - shark.position.z, dy = player.pos.y - shark.position.y;
+      const hdist = Math.hypot(dx, dz);
+      if (hdist < AGGRO_R) {                          // lock on and chase
+        sd.dirA = steerAngle(sd.dirA, Math.atan2(dz, dx), dt * 1.6);
+        shark.position.y += Math.sign(dy) * Math.min(Math.abs(dy), SHARK_CHASE * 0.6 * dt);
+        speed = SHARK_CHASE;
+        if (!inGrace && shark.position.distanceTo(player.pos) < TURTLE_R + sharkRadius(shark) * 0.7) {
+          lives--; livesEl.textContent = hearts(lives);
+          graceUntil = t + 1.6;
+          player.pos.add(player.pos.clone().sub(shark.position).setLength(3.5));
+          if (lives <= 0) gameOver();
+        }
+      }
+    }
+    shark.position.x += Math.cos(sd.dirA) * speed * dt;
+    shark.position.z += Math.sin(sd.dirA) * speed * dt;
+    shark.position.y += Math.sin(t + sd.bob) * 0.006;
+    shark.rotation.set(0, -sd.dirA, 0);
     if (Math.hypot(shark.position.x, shark.position.z) > WORLD_R * 1.3) launchShark(shark);
   }
 

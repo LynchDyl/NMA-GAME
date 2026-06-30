@@ -95,6 +95,19 @@
     .wardrobe-dock { width: 64vw; }
   }
 
+  /* aiming crosshair, shown when Friday is armed */
+  #crosshair {
+    position: fixed; top: 50%; left: 50%; width: 26px; height: 26px;
+    transform: translate(-50%, -50%); z-index: 5; pointer-events: none; display: none;
+    border: 2px solid rgba(255,120,120,0.85); border-radius: 50%;
+    box-shadow: 0 0 8px rgba(255,60,60,0.6), inset 0 0 6px rgba(255,60,60,0.4);
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: rgba(255,120,120,0.85);
+  }
+  #crosshair::before { left: 50%; top: -8px; width: 2px; height: 8px; transform: translateX(-50%); }
+  #crosshair::after { top: 50%; left: -8px; height: 2px; width: 8px; transform: translateY(-50%); }
+
   /* spacebar wiggle shout */
   #wiggle-text {
     position: fixed; top: 18%; left: 50%; transform: translateX(-50%) rotate(-4deg);
@@ -140,21 +153,26 @@
 
   <div id="hud" class="layer" style="display:none">
     <div><div class="lbl">SCORE</div><div class="big"><span id="score">0</span></div></div>
-    <div style="text-align:center"><div class="lbl">JELLIES EATEN</div><div class="big"><span id="jellies">0</span></div></div>
+    <div style="text-align:center"><div class="lbl">JELLIES</div><div class="big"><span id="jellies">0</span></div></div>
+    <div style="text-align:center"><div class="lbl">🍔 BURGERS</div><div class="big"><span id="burgers">0</span></div></div>
     <div class="right"><div class="lbl">LIVES</div><div class="big"><span id="lives">❤❤❤</span></div></div>
   </div>
+  <div id="crosshair"></div>
 
   <!-- Wardrobe / character-select screen -->
   <div id="wardrobe" class="layer">
     <div class="wardrobe-head">
       <h1>🐢 Friday's Wardrobe</h1>
-      <p>Pick Friday a hat, then explore the open ocean.<br>
-      <kbd>W</kbd> swim · <kbd>Mouse</kbd>/<kbd>A</kbd><kbd>D</kbd>/<kbd>↑</kbd><kbd>↓</kbd> steer · <kbd>SPACE</kbd> wiggle.<br>
-      Find &amp; eat the glowing moon jellies, and avoid the plastic bags!</p>
+      <p>Pick Friday a hat and a weapon, then explore the open ocean.<br>
+      <kbd>W</kbd> swim · <kbd>Mouse</kbd>/<kbd>A</kbd><kbd>D</kbd>/<kbd>↑</kbd><kbd>↓</kbd> steer · <kbd>SPACE</kbd> wiggle · <kbd>Click</kbd>/<kbd>F</kbd> attack.<br>
+      Eat the glowing moon jellies, dodge the plastic bags — and the sharks are
+      hostile now: blast them and they drop cheeseburgers! 🦈🍔</p>
     </div>
     <div class="wardrobe-dock">
       <div class="dock-title">HATS</div>
       <div id="hat-rack" class="rack"></div>
+      <div class="dock-title" style="margin-top:14px">LOADOUT</div>
+      <div id="weapon-rack" class="rack"></div>
       <button id="play">Start Swimming →</button>
       <a class="more" href="index.html">&larr; More games</a>
     </div>
@@ -167,7 +185,7 @@
       <div class="sub">National Marine Aquarium, Plymouth</div>
       <p id="msg"></p>
       <div class="keys">
-        <kbd>W</kbd> swim · <kbd>Mouse</kbd> / <kbd>A</kbd><kbd>D</kbd><kbd>↑</kbd><kbd>↓</kbd> steer &nbsp;·&nbsp; <kbd>SPACE</kbd> wiggle
+        <kbd>W</kbd> swim · <kbd>Mouse</kbd> / <kbd>A</kbd><kbd>D</kbd><kbd>↑</kbd><kbd>↓</kbd> steer &nbsp;·&nbsp; <kbd>SPACE</kbd> wiggle &nbsp;·&nbsp; <kbd>Click</kbd>/<kbd>F</kbd> attack
       </div>
       <div class="btn-row">
         <button id="play-again">Swim Again</button>
