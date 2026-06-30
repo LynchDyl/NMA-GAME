@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Friday's Ocean Dash — Dodge the Plastic!</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: #021b2e; font-family: 'Segoe UI', Tahoma, sans-serif; }
+  #c { display: block; width: 100vw; height: 100vh; }
+
+  .layer {
+    position: fixed; inset: 0; pointer-events: none; color: #eaf6ff;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+  }
+  #hud { padding: 16px 20px; display: flex; justify-content: space-between; font-weight: bold; }
+  #hud .right { text-align: right; }
+  #hud .big { font-size: 1.5rem; }
+  #hud .lbl { font-size: 0.75rem; opacity: 0.8; letter-spacing: 1px; }
+
+  #panel {
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at center, rgba(2,40,66,0.7), rgba(1,15,25,0.92));
+    pointer-events: auto;
+  }
+  #panel.hidden { display: none; }
+  .card {
+    max-width: 460px; text-align: center; padding: 28px 32px;
+    background: rgba(4,30,50,0.75); border: 1px solid rgba(120,200,255,0.25);
+    border-radius: 18px; box-shadow: 0 12px 50px rgba(0,0,0,0.5);
+  }
+  .card h1 { font-size: 1.7rem; margin-bottom: 6px; }
+  .card .sub { opacity: 0.8; margin-bottom: 14px; font-size: 0.9rem; }
+  .card p { line-height: 1.5; margin-bottom: 10px; font-size: 0.95rem; }
+  .card .keys { font-size: 0.85rem; opacity: 0.85; margin-bottom: 18px; }
+  .card kbd {
+    background: rgba(120,200,255,0.18); border: 1px solid rgba(120,200,255,0.4);
+    border-radius: 6px; padding: 2px 8px; font-family: inherit; font-weight: bold;
+  }
+  button {
+    pointer-events: auto; background: #2ecc71; color: #06281a; border: none;
+    padding: 13px 28px; font-size: 1rem; font-weight: bold; border-radius: 10px;
+    cursor: pointer; transition: transform 0.1s, background 0.15s;
+  }
+  button:hover { background: #27ae60; transform: translateY(-1px); }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #cfe8ff; }
+</style>
+</head>
+<body>
+  <div id="loading">Loading the ocean…</div>
+  <canvas id="c"></canvas>
+
+  <div id="hud" class="layer" style="display:none">
+    <div><div class="lbl">SCORE</div><div class="big"><span id="score">0</span></div></div>
+    <div class="right"><div class="lbl">BAGS DODGED</div><div class="big"><span id="dodged">0</span></div></div>
+  </div>
+
+  <div id="panel" class="layer">
+    <div class="card">
+      <h1>🐢 Friday's Ocean Dash</h1>
+      <div class="sub">National Marine Aquarium, Plymouth</div>
+      <p id="msg">You are <strong>Friday</strong>, a green sea turtle swimming the open ocean — but it's full of discarded plastic bags. Steer Friday to <strong>dodge every bag</strong>. The longer you swim, the faster it gets!</p>
+      <div class="keys">
+        Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrow keys &nbsp;·&nbsp; or move your mouse / drag on touch
+      </div>
+      <button id="play">Start Swimming</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+  { "imports": { "three": "./vendor/three.module.js" } }
+  </script>
+  <script type="module" src="dodge.js"></script>
+</body>
+</html>
