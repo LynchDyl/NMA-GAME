@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reef Rumble — Zeus vs Friday</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #021b2e; font-family: 'Segoe UI', Tahoma, sans-serif; overflow: hidden; }
+  body {
+    background: linear-gradient(180deg, #021b2e 0%, #0a3d62 55%, #124a72 100%);
+    color: #eaf6ff;
+  }
+
+  #stage {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px; padding: 12px;
+  }
+  #c {
+    width: min(94vw, 960px); height: auto; aspect-ratio: 960 / 540;
+    background: #021b2e; border-radius: 14px;
+    border: 1px solid rgba(120,200,255,0.25);
+    box-shadow: 0 14px 50px rgba(0,0,0,0.5);
+  }
+  #back-link {
+    color: #9fe8ff; text-decoration: none; font-size: 0.85rem; opacity: 0.85;
+  }
+  #back-link:hover { text-decoration: underline; }
+
+  .layer {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at center, rgba(2,40,66,0.75), rgba(1,15,25,0.94));
+    pointer-events: auto; padding: 16px; overflow-y: auto;
+  }
+  .layer.hidden { display: none; }
+
+  .card {
+    max-width: 720px; width: 100%; text-align: center; padding: 26px 30px;
+    background: rgba(4,30,50,0.8); border: 1px solid rgba(120,200,255,0.25);
+    border-radius: 18px; box-shadow: 0 12px 50px rgba(0,0,0,0.5);
+  }
+  .card h1 { font-size: 1.9rem; margin-bottom: 6px; }
+  .card .sub { opacity: 0.8; margin-bottom: 18px; font-size: 0.9rem; }
+
+  .mode-row { display: flex; gap: 12px; justify-content: center; margin-bottom: 18px; flex-wrap: wrap; }
+  .toggle-btn {
+    pointer-events: auto; background: rgba(120,200,255,0.1); color: #eaf6ff;
+    border: 1px solid rgba(120,200,255,0.35); padding: 11px 20px; border-radius: 10px;
+    font-weight: bold; cursor: pointer; font-size: 0.95rem; transition: background 0.15s, border-color 0.15s;
+  }
+  .toggle-btn:hover { background: rgba(120,200,255,0.2); }
+  .toggle-btn.selected { background: rgba(46,204,113,0.25); border-color: #2ecc71; box-shadow: 0 0 0 1px #2ecc71 inset; }
+
+  #fighter-choice { margin-bottom: 18px; }
+  #fighter-choice.hidden { display: none; }
+  .fighter-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .fighter-btn {
+    pointer-events: auto; width: 190px; background: rgba(120,200,255,0.06);
+    border: 1px solid rgba(120,200,255,0.25); border-radius: 14px; padding: 14px;
+    cursor: pointer; color: inherit; transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .fighter-btn:hover { background: rgba(120,200,255,0.14); transform: translateY(-2px); }
+  .fighter-btn.selected { background: rgba(46,204,113,0.2); border-color: #2ecc71; box-shadow: 0 0 0 1px #2ecc71 inset; }
+  .fighter-btn .fic { font-size: 2.6rem; }
+  .fighter-btn h3 { font-size: 1.05rem; margin: 6px 0 3px; }
+  .fighter-btn .ftag { font-size: 0.72rem; opacity: 0.75; }
+
+  .movelists { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; text-align: left; }
+  .movelist { flex: 1; min-width: 260px; background: rgba(120,200,255,0.06); border: 1px solid rgba(120,200,255,0.18); border-radius: 12px; padding: 14px 16px; }
+  .movelist h4 { font-size: 0.95rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .movelist .row { display: flex; justify-content: space-between; font-size: 0.82rem; padding: 3px 0; opacity: 0.9; }
+  .movelist .row b { opacity: 0.6; font-weight: normal; }
+  .movelist kbd {
+    background: rgba(120,200,255,0.18); border: 1px solid rgba(120,200,255,0.4);
+    border-radius: 5px; padding: 1px 6px; font-family: inherit; font-weight: bold; font-size: 0.75rem;
+  }
+
+  button.primary {
+    pointer-events: auto; background: #2ecc71; color: #06281a; border: none;
+    padding: 14px 34px; font-size: 1.05rem; font-weight: bold; border-radius: 10px;
+    cursor: pointer; transition: transform 0.1s, background 0.15s;
+  }
+  button.primary:hover { background: #27ae60; transform: translateY(-1px); }
+  button.secondary {
+    pointer-events: auto; background: rgba(120,200,255,0.16); color: #eaf6ff;
+    border: 1px solid rgba(120,200,255,0.4); padding: 13px 26px; font-size: 0.95rem;
+    font-weight: bold; border-radius: 10px; cursor: pointer; transition: background 0.15s;
+  }
+  button.secondary:hover { background: rgba(120,200,255,0.28); }
+  .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .more { display: block; margin-top: 16px; color: #9fe8ff; text-decoration: none; font-size: 0.85rem; }
+  .more:hover { text-decoration: underline; }
+
+  #end-screen h1 { font-size: 2.1rem; margin-bottom: 4px; }
+  #end-screen .winner-line { font-size: 1.1rem; opacity: 0.85; margin-bottom: 20px; }
+
+  .credit { margin-top: 6px; font-size: 0.75rem; opacity: 0.75; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .credit .dot { opacity: 0.5; }
+  @media (max-width: 560px) {
+    .card { padding: 20px 16px; }
+    .movelist { min-width: 100%; }
+  }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="c" width="960" height="540"></canvas>
+    <a id="back-link" href="index.html">&larr; More games</a>
+  </div>
+
+  <!-- Start / setup screen -->
+  <div id="start-screen" class="layer">
+    <div class="card">
+      <h1>🥊 Reef Rumble</h1>
+      <div class="sub">A Mortal-Kombat-style scrap between Zeus the zebra shark and Friday the turtle</div>
+
+      <div class="mode-row">
+        <button class="toggle-btn selected" data-mode="2p">👫 2 Player (share keyboard)</button>
+        <button class="toggle-btn" data-mode="1p">🤖 1 Player (vs CPU)</button>
+      </div>
+
+      <div id="fighter-choice" class="hidden">
+        <div class="sub" style="margin-bottom:10px">Choose your fighter — the CPU takes the other one</div>
+        <div class="fighter-row">
+          <div class="fighter-btn selected" data-fighter="zeus">
+            <div class="fic">🦈</div>
+            <h3>Zeus</h3>
+            <div class="ftag">the Zebra Shark — fast &amp; aggressive</div>
+          </div>
+          <div class="fighter-btn" data-fighter="friday">
+            <div class="fic">🐢</div>
+            <h3>Friday</h3>
+            <div class="ftag">the Turtle — tanky &amp; defensive</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="movelists">
+        <div class="movelist">
+          <h4>🦈 Zeus — <span id="p1-tag">Player 1</span></h4>
+          <div class="row"><span>Move</span><b><kbd>A</kbd> <kbd>D</kbd></b></div>
+          <div class="row"><span>Jump</span><b><kbd>W</kbd></b></div>
+          <div class="row"><span>Block</span><b><kbd>S</kbd></b></div>
+          <div class="row"><span>Bite (punch)</span><b><kbd>F</kbd></b></div>
+          <div class="row"><span>Tail Slap (kick)</span><b><kbd>G</kbd></b></div>
+          <div class="row"><span>Frenzy Dash (special)</span><b><kbd>H</kbd></b></div>
+        </div>
+        <div class="movelist">
+          <h4>🐢 Friday — <span id="p2-tag">Player 2</span></h4>
+          <div class="row"><span>Move</span><b><kbd>&larr;</kbd> <kbd>&rarr;</kbd></b></div>
+          <div class="row"><span>Jump</span><b><kbd>&uarr;</kbd></b></div>
+          <div class="row"><span>Block</span><b><kbd>&darr;</kbd></b></div>
+          <div class="row"><span>Flipper Jab (punch)</span><b><kbd>K</kbd></b></div>
+          <div class="row"><span>Shell Stomp (kick)</span><b><kbd>L</kbd></b></div>
+          <div class="row"><span>Shell Spin (special)</span><b><kbd>;</kbd></b></div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button id="start-btn" class="primary">Start Fight →</button>
+      </div>
+      <a class="more" href="index.html">&larr; More games</a>
+      <div class="credit">
+        <span>Best of 3 rounds</span><span class="dot">&bull;</span><span>Inspired by the residents of the National Marine Aquarium, Plymouth</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Match-end screen -->
+  <div id="end-screen" class="layer hidden">
+    <div class="card">
+      <h1 id="end-title">🏆 ZEUS WINS THE MATCH!</h1>
+      <div class="winner-line" id="end-sub">2 — 1</div>
+      <div class="btn-row">
+        <button id="rematch-btn" class="primary">Rematch</button>
+        <button id="menu-btn" class="secondary">Change Setup</button>
+      </div>
+      <a class="more" href="index.html">&larr; More games</a>
+    </div>
+  </div>
+
+  <script src="fight.js"></script>
+</body>
+</html>
