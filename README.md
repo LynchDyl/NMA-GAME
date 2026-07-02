@@ -1,11 +1,38 @@
-# 🐢 Friday's Ocean Dash
+# 🐢 Friday the Turtle Games
 
-An open-world 3D browser game inspired by **Friday the green sea turtle** at the
-**National Marine Aquarium in Plymouth** (run by the **Ocean Conservation Trust**).
+Browser games inspired by the residents of the **National Marine Aquarium in
+Plymouth** (run by the **Ocean Conservation Trust**).
 
-Open `index.html` for the landing page, or go straight to `dodge.html`.
+Open `index.html` for the landing page, which links to each game.
 
-## The game
+## 🥊 Reef Rumble (`fight.html`)
+
+A Mortal-Kombat-style 2D fighting game starring **Zeus the zebra shark** and
+**Friday the turtle**. Canvas-based, no build tooling or external assets — just
+open `fight.html`.
+
+- **1 Player vs CPU** or **2 Player local** (share the keyboard), best of 3 rounds.
+- Full health bars, round-win pips, a countdown timer, and round/K.O./match banners.
+- Each fighter has three moves — a punch, a kick and a special:
+  - **🦈 Zeus** (fast & aggressive): Bite, Tail Slap, Frenzy Dash.
+  - **🐢 Friday** (tanky & defensive): Flipper Jab, Shell Stomp, Shell Spin (super armor).
+- **Defense has depth**: hold Block to soak damage as chip, or tap it right as a hit
+  lands for a **Perfect Block** — zero damage plus a free punish on the attacker.
+  **Dodge Roll** grants a brief invincibility window to slip through an attack
+  entirely, on a short cooldown so it can't be spammed.
+- Win the deciding round with a K.O. and you get a **"FINISH HIM/HER!"** prompt,
+  then a **REEF-ALITY** finisher animation (Mortal-Kombat-style, aquarium-safe —
+  no gore) before the match-end screen.
+- Controls — **Player 1 (Zeus)**: `A`/`D` move, `W` jump, `S` block, `E` dodge,
+  `F` punch, `G` kick, `H` special. **Player 2 (Friday)**: arrow keys to
+  move/jump/block, `/` dodge, `K` punch, `L` kick, `;` special. `Esc` returns to
+  the setup screen.
+
+## 🌊 Friday's Ocean Dash (`dodge.html`)
+
+An open-world 3D browser game starring Friday the green sea turtle.
+
+### The game
 
 **You are Friday.** Dress him up in a GTA-style **wardrobe** (cowboy hat, beer
 helmet, fez, top hat, party hat, captain's cap, crown, sombrero, propeller
@@ -31,7 +58,8 @@ explore an open ocean** in 3D:
 - **Click** (hold) or **`F`** to attack with the equipped weapon.
 
 Files: `index.html`, `dodge.html`, `dodge.js`, `vendor/three.module.js` and
-`vendor/models.js` (the baked shark/fish meshes).
+`vendor/models.js` (the baked shark/fish meshes). Reef Rumble lives separately
+in `fight.html` + `fight.js` and shares nothing with the 3D game.
 
 ### The shark & fish models
 
