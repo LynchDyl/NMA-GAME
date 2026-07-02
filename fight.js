@@ -12,9 +12,17 @@
   const GRAVITY = 2600;
   const JUMP_VELOCITY = -880;
   const WALK_SPEED = 250;
-  const BODY_RADIUS = 46; // half-distance fighters can close to
+  const BODY_RADIUS = 32; // half-distance fighters can close to (must stay under every move's range)
   const ROUND_TIME = 60;
   const ROUNDS_TO_WIN = 2;
+
+  const DODGE_SPEED = 780;
+  const DODGE_DURATION = 320;  // ms, total roll animation
+  const DODGE_IFRAME = 210;    // ms, invulnerable portion of the roll
+  const DODGE_COOLDOWN = 480;  // ms before another dodge is allowed
+  const PARRY_WINDOW = 150;    // ms — block within this long of pressing = perfect block
+  const FATALITY_DURATION = 2700;
+  const FINISH_PROMPT_DURATION = 2200;
 
   const MOVES = {
     zeus: {
@@ -34,12 +42,18 @@
     friday: { emoji: '🐢', displayName: 'Friday', tagline: 'the Turtle',      color: '#3ecf8e', aura: 'rgba(62,207,142,0.35)' },
   };
 
+  const FINISHERS = {
+    zeus:   { name: 'Reef Frenzy', flashColor: '#eaffff', tint: '255,120,120' },
+    friday: { name: 'Shell Slam',  flashColor: '#e8fff0', tint: '120,255,170' },
+  };
+  const FINISH_STAMP = 'REEF-ALITY!';
+
   // ---------------------------------------------------------------- input
   const held = new Set();
   const queued = new Set(); // edge-triggered actions consumed once per press
 
-  const P1_KEYS = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', special: 'KeyH' };
-  const P2_KEYS = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', special: 'Semicolon' };
+  const P1_KEYS = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', special: 'KeyH', dodge: 'KeyE' };
+  const P2_KEYS = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', special: 'Semicolon', dodge: 'Slash' };
   const GAME_KEYS = new Set([...Object.values(P1_KEYS), ...Object.values(P2_KEYS), 'Escape']);
 
   window.addEventListener('keydown', (e) => {
@@ -60,8 +74,11 @@
       punch: queued.has(keys.punch),
       kick: queued.has(keys.kick),
       special: queued.has(keys.special),
+      dodge: queued.has(keys.dodge),
     };
   }
+
+  const NO_INPUT = { left: false, right: false, down: false, jump: false, punch: false, kick: false, special: false, dodge: false };
 
   // -------------------------------------------------------------- fighter
   function makeFighter(kind, x, facing, controls, isCPU) {
@@ -70,13 +87,14 @@
       kind, ...meta,
       x, y: FLOOR_Y, vx: 0, vy: 0, facing,
       hp: 100, maxHp: 100, displayHp: 100, wins: 0,
-      state: 'idle', // idle | walk | jump | crouch | block | attack | hitstun | ko
+      state: 'idle', // idle | walk | jump | block | dodge | attack | hitstun | ko
       grounded: true,
       attack: null, hasHit: false,
       hitstunTimer: 0,
-      flashTimer: 0, tiltTimer: 0, squash: 1,
+      dodgeTimer: 0, dodgeCooldown: 0, blockHeldFor: 0,
+      flashTimer: 0, tiltTimer: 0, parryGlow: 0,
       controls, isCPU,
-      aiTimer: 0, aiHoldTimer: 0, aiInput: { left: false, right: false, down: false, jump: false, punch: false, kick: false, special: false },
+      aiTimer: 0, aiInput: { ...NO_INPUT },
     };
   }
 
@@ -84,9 +102,11 @@
 
   function resetFighters() {
     p1.x = 300; p1.y = FLOOR_Y; p1.vx = 0; p1.vy = 0; p1.facing = 1;
-    p1.hp = p1.maxHp; p1.displayHp = p1.maxHp; p1.state = 'idle'; p1.attack = null; p1.hitstunTimer = 0;
+    p1.hp = p1.maxHp; p1.displayHp = p1.maxHp; p1.state = 'idle'; p1.attack = null;
+    p1.hitstunTimer = 0; p1.dodgeTimer = 0; p1.dodgeCooldown = 0; p1.blockHeldFor = 0;
     p2.x = 660; p2.y = FLOOR_Y; p2.vx = 0; p2.vy = 0; p2.facing = -1;
-    p2.hp = p2.maxHp; p2.displayHp = p2.maxHp; p2.state = 'idle'; p2.attack = null; p2.hitstunTimer = 0;
+    p2.hp = p2.maxHp; p2.displayHp = p2.maxHp; p2.state = 'idle'; p2.attack = null;
+    p2.hitstunTimer = 0; p2.dodgeTimer = 0; p2.dodgeCooldown = 0; p2.blockHeldFor = 0;
     effects.particles.length = 0;
     effects.shake = 0;
   }
@@ -124,7 +144,7 @@
     p1 = makeFighter('zeus', 300, 1, P1_KEYS, p1IsCPU);
     p2 = makeFighter('friday', 660, -1, P2_KEYS, p2IsCPU);
     effects = { particles: [], shake: 0 };
-    match = { phase: 'intro', round: 1, timer: ROUND_TIME, introTimer: 2000, endTimer: 0, bannerMain: 'ROUND 1', bannerSub: '' };
+    match = { phase: 'intro', round: 1, timer: ROUND_TIME, introTimer: 2000, endTimer: 0, bannerMain: 'ROUND 1', bannerSub: '', lastReason: null, finisher: null };
     startScreen.classList.add('hidden');
     endScreen.classList.add('hidden');
     held.clear(); queued.clear();
@@ -134,7 +154,7 @@
   document.getElementById('rematch-btn').addEventListener('click', () => {
     p1.wins = 0; p2.wins = 0;
     resetFighters();
-    match = { phase: 'intro', round: 1, timer: ROUND_TIME, introTimer: 2000, endTimer: 0, bannerMain: 'ROUND 1', bannerSub: '' };
+    match = { phase: 'intro', round: 1, timer: ROUND_TIME, introTimer: 2000, endTimer: 0, bannerMain: 'ROUND 1', bannerSub: '', lastReason: null, finisher: null };
     endScreen.classList.add('hidden');
   });
 
@@ -154,15 +174,18 @@
     const inAttackRange = dist < 130;
     if (f.aiTimer <= 0) {
       f.aiTimer = 220 + Math.random() * 260;
-      const input = { left: false, right: false, down: false, jump: false, punch: false, kick: false, special: false };
-      if (opp.state === 'attack' && dist < 150 && Math.random() < 0.55) {
-        input.down = true; // react-block
+      const input = { ...NO_INPUT };
+      if (opp.state === 'attack' && dist < 150 && Math.random() < 0.6) {
+        // react: sometimes block, sometimes roll through it
+        if (Math.random() < 0.45) input.dodge = true;
+        else input.down = true;
       } else if (inAttackRange) {
         const r = Math.random();
-        if (r < 0.35) input.punch = true;
-        else if (r < 0.62) input.kick = true;
-        else if (r < 0.78) input.special = true;
-        else if (r < 0.9) input.down = true;
+        if (r < 0.32) input.punch = true;
+        else if (r < 0.56) input.kick = true;
+        else if (r < 0.72) input.special = true;
+        else if (r < 0.85) input.down = true;
+        else if (r < 0.93) input.dodge = true;
         // else whiff / reposition
       } else {
         if (opp.x < f.x) input.left = true; else input.right = true;
@@ -175,7 +198,7 @@
 
   // -------------------------------------------------------------- update
   function tryStartAttack(f, opp, type) {
-    if (f.state === 'attack' || f.state === 'hitstun' || !f.grounded) return;
+    if (f.state === 'attack' || f.state === 'hitstun' || f.state === 'dodge' || !f.grounded) return;
     const move = MOVES[f.kind][type];
     f.state = 'attack';
     f.facing = opp.x >= f.x ? 1 : -1;
@@ -184,9 +207,42 @@
     f.vx = 0;
   }
 
+  function tryStartDodge(f, opp, input) {
+    if (f.state === 'attack' || f.state === 'hitstun' || f.state === 'dodge' || !f.grounded || f.dodgeCooldown > 0) return;
+    let dir;
+    if (input.left && !input.right) dir = -1;
+    else if (input.right && !input.left) dir = 1;
+    else dir = opp.x >= f.x ? -1 : 1; // no direction held: hop away from opponent
+    f.state = 'dodge';
+    f.dodgeTimer = 0;
+    f.vx = dir * DODGE_SPEED;
+    f.vy = 0;
+  }
+
+  function pushParticle(p) {
+    effects.particles.push({ total: p.life, ...p });
+  }
+
   function applyDamage(defender, attacker, move) {
     const facingAttacker = (attacker.x < defender.x && defender.facing === -1) || (attacker.x > defender.x && defender.facing === 1);
     const blocking = defender.state === 'block' && facingAttacker;
+    const perfectBlock = blocking && defender.blockHeldFor <= PARRY_WINDOW;
+
+    if (perfectBlock) {
+      // sophisticated parry: no damage, no chip, and the attacker gets punished
+      defender.flashTimer = 140;
+      defender.parryGlow = 260;
+      attacker.state = 'hitstun';
+      attacker.hitstunTimer = 340;
+      attacker.attack = null;
+      attacker.vx = (attacker.x > defender.x ? 1 : -1) * 170;
+      attacker.vy = -120;
+      attacker.flashTimer = 100;
+      pushParticle({ x: (attacker.x + defender.x) / 2, y: defender.y - 100, life: 480, text: 'PERFECT BLOCK!', color: '#ffd166', big: true });
+      effects.shake = 12;
+      return;
+    }
+
     // super armor: a defender mid-way through their own armored special shrugs off
     // hitstun and knockback (but still takes damage) instead of getting interrupted.
     const armored = defender.state === 'attack' && defender.attack && defender.attack.move.armor;
@@ -210,18 +266,27 @@
       defender.vx = (defender.x > attacker.x ? 1 : -1) * push;
       if (!blocking) defender.vy = -160;
     }
-    effects.particles.push({ x: (attacker.x + defender.x) / 2, y: defender.y - 90, life: 260, dmg, blocked: blocking });
+    pushParticle({ x: (attacker.x + defender.x) / 2, y: defender.y - 90, life: 260, dmg, blocked: blocking });
     effects.shake = move.dmg >= 15 ? 14 : 6;
   }
 
   function updateFighter(f, opp, input, dt) {
-    // face opponent when not locked into an attack/hitstun/knockout
-    if (f.state !== 'attack' && f.state !== 'hitstun' && f.state !== 'ko') {
+    const wasBlocking = f.state === 'block';
+
+    // face opponent when not locked into an attack/hitstun/knockout/dodge
+    if (f.state !== 'attack' && f.state !== 'hitstun' && f.state !== 'ko' && f.state !== 'dodge') {
       f.facing = opp.x >= f.x ? 1 : -1;
     }
 
     if (f.state === 'ko') {
       f.vx *= Math.max(0, 1 - dt / 150);
+    } else if (f.state === 'dodge') {
+      f.dodgeTimer += dt;
+      f.vx *= Math.max(0, 1 - dt / 220);
+      if (f.dodgeTimer >= DODGE_DURATION) {
+        f.state = f.grounded ? 'idle' : 'jump';
+        f.dodgeCooldown = DODGE_COOLDOWN;
+      }
     } else if (f.state === 'hitstun') {
       f.hitstunTimer -= dt;
       if (f.hitstunTimer <= 0) f.state = f.grounded ? 'idle' : 'jump';
@@ -237,8 +302,13 @@
           const facingRight = f.facing === 1 && opp.x >= f.x;
           const facingLeft = f.facing === -1 && opp.x <= f.x;
           if (dist <= a.move.range && (facingRight || facingLeft) && opp.state !== 'ko') {
+            const dodged = opp.state === 'dodge' && opp.dodgeTimer < DODGE_IFRAME;
             f.hasHit = true;
-            applyDamage(opp, f, a.move);
+            if (dodged) {
+              pushParticle({ x: opp.x, y: opp.y - 90, life: 340, text: 'DODGED!', color: '#9fe8ff' });
+            } else {
+              applyDamage(opp, f, a.move);
+            }
           }
         }
         if (a.elapsed >= a.move.active) { a.phase = 'recovery'; a.elapsed = 0; }
@@ -267,11 +337,15 @@
       if (!f.grounded) f.state = 'jump';
 
       if (canAct && !input.down) {
-        if (input.punch) tryStartAttack(f, opp, 'punch');
+        if (input.dodge) tryStartDodge(f, opp, input);
+        else if (input.punch) tryStartAttack(f, opp, 'punch');
         else if (input.kick) tryStartAttack(f, opp, 'kick');
         else if (input.special) tryStartAttack(f, opp, 'special');
       }
     }
+
+    // track how long block has been continuously held, for the perfect-block window
+    f.blockHeldFor = f.state === 'block' ? (wasBlocking ? f.blockHeldFor + dt : dt) : 0;
 
     // physics
     if (!f.grounded || f.vy !== 0) {
@@ -289,6 +363,8 @@
 
     if (f.flashTimer > 0) f.flashTimer -= dt;
     if (f.tiltTimer > 0) f.tiltTimer -= dt;
+    if (f.parryGlow > 0) f.parryGlow -= dt;
+    if (f.dodgeCooldown > 0) f.dodgeCooldown -= dt;
     f.displayHp += (f.hp - f.displayHp) * Math.min(1, dt / 220);
   }
 
@@ -309,6 +385,7 @@
   function endRound(winner, reason) {
     match.phase = 'roundend';
     match.endTimer = 2200;
+    match.lastReason = reason;
     if (winner) {
       winner.wins++;
       match.bannerMain = reason === 'time' ? "TIME'S UP" : 'K.O.!';
@@ -319,13 +396,27 @@
     }
   }
 
+  function showMatchEnd(winner) {
+    match.phase = 'matchend';
+    document.getElementById('end-title').textContent = `🏆 ${winner.displayName.toUpperCase()} WINS THE MATCH!`;
+    document.getElementById('end-sub').textContent = `${p1.displayName} ${p1.wins} — ${p2.wins} ${p2.displayName}`;
+    endScreen.classList.remove('hidden');
+  }
+
+  function beginFinisher(winner, loser) {
+    match.phase = 'finish-prompt';
+    match.finisher = { winner, loser, promptTimer: FINISH_PROMPT_DURATION, playTimer: 0, tickTimer: 0 };
+    loser.state = 'ko';
+    loser.vx = 0;
+  }
+
   function startNextRound() {
-    if (p1.wins >= ROUNDS_TO_WIN || p2.wins >= ROUNDS_TO_WIN) {
-      match.phase = 'matchend';
+    const matchOver = p1.wins >= ROUNDS_TO_WIN || p2.wins >= ROUNDS_TO_WIN;
+    if (matchOver) {
       const winner = p1.wins > p2.wins ? p1 : p2;
-      document.getElementById('end-title').textContent = `🏆 ${winner.displayName.toUpperCase()} WINS THE MATCH!`;
-      document.getElementById('end-sub').textContent = `${p1.displayName} ${p1.wins} — ${p2.wins} ${p2.displayName}`;
-      endScreen.classList.remove('hidden');
+      const loser = winner === p1 ? p2 : p1;
+      if (match.lastReason === 'ko') beginFinisher(winner, loser);
+      else showMatchEnd(winner);
       return;
     }
     match.round++;
@@ -337,8 +428,6 @@
     match.bannerSub = '';
   }
 
-  const NO_INPUT = { left: false, right: false, down: false, jump: false, punch: false, kick: false, special: false };
-
   function update(dt) {
     if (!match || match.phase === 'menu' || match.phase === 'matchend') return;
 
@@ -346,7 +435,6 @@
       match.introTimer -= dt;
       match.bannerMain = match.introTimer > 800 ? `ROUND ${match.round}` : 'FIGHT!';
       if (match.introTimer <= 0) { match.phase = 'fighting'; }
-      // fighters idle-bob but don't act
       updateFighter(p1, p2, NO_INPUT, dt);
       updateFighter(p2, p1, NO_INPUT, dt);
       resolveCollision(p1, p2);
@@ -376,11 +464,42 @@
           endRound(winner, 'ko');
         }
       }
+    } else if (match.phase === 'finish-prompt') {
+      const fin = match.finisher;
+      fin.promptTimer -= dt;
+      updateFighter(p1, p2, NO_INPUT, dt);
+      updateFighter(p2, p1, NO_INPUT, dt);
+      const winnerTriggered = fin.winner.controls && queued.has(fin.winner.controls.special);
+      const cpuReady = fin.winner.isCPU && fin.promptTimer <= FINISH_PROMPT_DURATION - 900;
+      if (winnerTriggered || cpuReady || fin.promptTimer <= 0) {
+        match.phase = 'fatality';
+        fin.playTimer = 0;
+        fin.tickTimer = 0;
+      }
+    } else if (match.phase === 'fatality') {
+      const fin = match.finisher;
+      fin.playTimer += dt;
+      fin.tickTimer -= dt;
+      updateFighter(p1, p2, NO_INPUT, dt);
+      updateFighter(p2, p1, NO_INPUT, dt);
+      const t = fin.playTimer / FATALITY_DURATION;
+      if (t < 0.42 && fin.tickTimer <= 0) {
+        fin.tickTimer = 140;
+        const tint = FINISHERS[fin.winner.kind].tint;
+        pushParticle({ x: fin.loser.x + (Math.random() - 0.5) * 50, y: fin.loser.y - 80 + (Math.random() - 0.5) * 40, life: 260, emoji: '💥' });
+        fin.loser.flashTimer = 160;
+        effects.shake = 9;
+      } else if (t >= 0.58 && fin.tickTimer <= 0) {
+        fin.tickTimer = 90;
+        pushParticle({ x: Math.random() * ARENA_W, y: -10, life: 1400, emoji: Math.random() < 0.5 ? '✨' : '🫧', drift: 60 + Math.random() * 60, sway: Math.random() * 2 });
+      }
+      if (fin.playTimer >= FATALITY_DURATION) showMatchEnd(fin.winner);
     }
 
     for (let i = effects.particles.length - 1; i >= 0; i--) {
       const p = effects.particles[i];
       p.life -= dt;
+      if (p.drift) p.y += p.drift * dt / 1000;
       if (p.life <= 0) effects.particles.splice(i, 1);
     }
     if (effects.shake > 0) effects.shake = Math.max(0, effects.shake - dt / 16);
@@ -393,7 +512,7 @@
     x: Math.random() * ARENA_W, y: Math.random() * ARENA_H, r: 2 + Math.random() * 4, speed: 10 + Math.random() * 20,
   }));
 
-  function drawBackground(t) {
+  function drawBackground() {
     const g = ctx.createLinearGradient(0, 0, 0, ARENA_H);
     g.addColorStop(0, '#04263f'); g.addColorStop(0.55, '#0a3d62'); g.addColorStop(1, '#1e6091');
     ctx.fillStyle = g;
@@ -430,14 +549,20 @@
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath(); ctx.ellipse(0, 6, 40, 10, 0, 0, Math.PI * 2); ctx.fill();
 
-    // aura
-    ctx.fillStyle = f.aura;
-    ctx.beginPath(); ctx.arc(0, -70, 60, 0, Math.PI * 2); ctx.fill();
+    // aura (glows gold briefly on a perfect block)
+    ctx.fillStyle = f.parryGlow > 0 ? 'rgba(255,209,102,0.5)' : f.aura;
+    ctx.beginPath(); ctx.arc(0, -70, f.parryGlow > 0 ? 70 : 60, 0, Math.PI * 2); ctx.fill();
 
-    let bob = 0, squashX = 1, squashY = 1, rot = 0;
+    let bob = 0, squashX = 1, squashY = 1, rot = 0, alpha = 1;
     if (f.state === 'walk') bob = Math.sin(performance.now() / 90) * 4;
     if (f.state === 'jump') squashY = 1.08;
     if (f.state === 'block') squashX = 0.92;
+    if (f.state === 'dodge') {
+      const p = f.dodgeTimer / DODGE_DURATION;
+      squashX = 1.25; squashY = 0.82;
+      bob = Math.sin(p * Math.PI) * -10;
+      alpha = f.dodgeTimer < DODGE_IFRAME ? 0.55 : 0.85; // ghostly while invulnerable
+    }
     if (f.state === 'attack') {
       const a = f.attack;
       if (a.phase === 'startup') { squashX = 0.9; squashY = 1.06; }
@@ -446,11 +571,15 @@
     if (f.state === 'hitstun') { rot = f.facing * -0.15; squashX = 0.95; }
     if (f.state === 'ko') { rot = Math.PI / 2 * f.facing; bob = 30; }
 
+    ctx.globalAlpha = alpha;
     ctx.translate(0, -78 + bob);
     ctx.rotate(rot);
     ctx.scale(f.facing * squashX, squashY);
 
-    if (f.flashTimer > 0) {
+    if (f.parryGlow > 0) {
+      ctx.shadowColor = '#ffd166';
+      ctx.shadowBlur = 30;
+    } else if (f.flashTimer > 0) {
       ctx.shadowColor = '#ff5b5b';
       ctx.shadowBlur = 24;
     }
@@ -463,15 +592,31 @@
 
   function drawParticles() {
     for (const p of effects.particles) {
-      const t = 1 - p.life / 260;
+      const t = 1 - p.life / p.total;
       ctx.save();
-      ctx.globalAlpha = Math.max(0, 1 - t);
-      ctx.font = `${28 + t * 14}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(p.blocked ? '🛡️' : '💥', p.x, p.y - t * 30);
-      ctx.font = 'bold 16px Segoe UI';
-      ctx.fillStyle = p.blocked ? '#9fe8ff' : '#ffd166';
-      ctx.fillText(`-${p.dmg}`, p.x, p.y - 34 - t * 30);
+      ctx.globalAlpha = Math.max(0, p.drift ? Math.min(1, p.life / 400) : 1 - t);
+      if (p.text) {
+        ctx.font = `900 ${p.big ? 26 : 18}px Segoe UI`;
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#06283a';
+        ctx.strokeText(p.text, p.x, p.y - t * 26);
+        ctx.fillStyle = p.color || '#eaf6ff';
+        ctx.fillText(p.text, p.x, p.y - t * 26);
+      } else {
+        ctx.font = `${28 + t * 14}px sans-serif`;
+        ctx.textAlign = 'center';
+        if (p.sway !== undefined) {
+          ctx.fillText(p.emoji, p.x + Math.sin(performance.now() / 300 + p.sway) * 14, p.y);
+        } else {
+          ctx.fillText(p.blocked ? '🛡️' : p.emoji || '💥', p.x, p.y - t * 30);
+        }
+        if (p.dmg != null) {
+          ctx.font = 'bold 16px Segoe UI';
+          ctx.fillStyle = p.blocked ? '#9fe8ff' : '#ffd166';
+          ctx.fillText(`-${p.dmg}`, p.x, p.y - 34 - t * 30);
+        }
+      }
       ctx.restore();
     }
   }
@@ -507,6 +652,12 @@
       ctx.fillStyle = i < f.wins ? '#ffd166' : 'rgba(255,255,255,0.25)';
       ctx.fill();
     }
+
+    // dodge-ready pip (small blue dot) — sophistication cue for players
+    ctx.beginPath();
+    ctx.arc(alignRight ? -8 : w + 8, h + 16, 4, 0, Math.PI * 2);
+    ctx.fillStyle = f.dodgeCooldown > 0 ? 'rgba(159,232,255,0.25)' : '#9fe8ff';
+    ctx.fill();
     ctx.restore();
   }
 
@@ -545,6 +696,132 @@
     ctx.restore();
   }
 
+  function drawFinishPrompt(fin) {
+    const pulse = 1 + Math.sin(performance.now() / 140) * 0.05;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.translate(ARENA_W / 2, ARENA_H / 2 - 20);
+    ctx.scale(pulse, pulse);
+    ctx.font = '900 50px Segoe UI';
+    ctx.strokeStyle = '#3a0606';
+    ctx.lineWidth = 7;
+    const label = `FINISH ${fin.loser.displayName.toUpperCase()}!`;
+    ctx.strokeText(label, 0, 0);
+    const grad = ctx.createLinearGradient(-220, 0, 220, 0);
+    grad.addColorStop(0, '#ffd166'); grad.addColorStop(0.5, '#ff5b3d'); grad.addColorStop(1, '#ffd166');
+    ctx.fillStyle = grad;
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+
+    if (!fin.winner.isCPU) {
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 18px Segoe UI';
+      ctx.fillStyle = 'rgba(234,246,255,0.85)';
+      ctx.fillText('press SPECIAL to finish it', ARENA_W / 2, ARENA_H / 2 + 34);
+      ctx.restore();
+    }
+  }
+
+  function easeOutBack(t) {
+    const c1 = 1.70158, c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+  }
+
+  function drawFatalityScene(fin) {
+    const t = Math.min(1, fin.playTimer / FATALITY_DURATION);
+    const { winner, loser } = fin;
+    const flashEnd = 0.58;
+    const info = FINISHERS[winner.kind];
+
+    // --- stage A/B: loser still visible, gets shaken & flashed ---
+    if (t < flashEnd) {
+      ctx.save();
+      ctx.translate(loser.x, loser.y);
+      const shake = Math.sin(performance.now() / 35) * (t < 0.42 ? 4 : 1);
+      ctx.translate(shake, -78);
+      ctx.globalAlpha = Math.max(0, 1 - Math.max(0, t - 0.42) / (flashEnd - 0.42));
+      ctx.rotate(loser.facing * -0.2);
+      if (loser.flashTimer > 0) { ctx.shadowColor = '#ff5b5b'; ctx.shadowBlur = 26; }
+      ctx.font = '86px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(loser.emoji, 0, 0);
+      ctx.restore();
+    }
+
+    // --- winner: lunges during stage A, victory pose after ---
+    ctx.save();
+    let wx = winner.x, wy = winner.y - 78, wScale = 1;
+    if (t < 0.42) {
+      const lungePhase = (t / 0.42 * 6) % 1;
+      wx += winner.facing * Math.sin(lungePhase * Math.PI) * 30;
+    } else {
+      wScale = 1 + Math.sin(performance.now() / 220) * 0.05 + Math.min(0.12, (t - 0.42) * 0.3);
+    }
+    ctx.translate(wx, wy);
+    ctx.scale(winner.facing * wScale, wScale);
+    ctx.shadowColor = '#ffd166';
+    ctx.shadowBlur = t > 0.42 ? 22 : 0;
+    ctx.font = '86px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(winner.emoji, 0, 0);
+    ctx.restore();
+
+    // --- flash overlay at the transition moment ---
+    if (t >= 0.34 && t < flashEnd) {
+      const localT = (t - 0.34) / (flashEnd - 0.34);
+      const alpha = Math.sin(Math.min(1, localT) * Math.PI);
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.85;
+      ctx.fillStyle = info.flashColor;
+      ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+      ctx.restore();
+    }
+
+    // --- lingering tinted vignette through the whole sequence ---
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    const vg = ctx.createRadialGradient(ARENA_W / 2, ARENA_H / 2, 140, ARENA_W / 2, ARENA_H / 2, 520);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, `rgba(${info.tint},0.4)`);
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+    ctx.restore();
+
+    // --- stamp stage ---
+    if (t >= flashEnd) {
+      const localT = (t - flashEnd) / (1 - flashEnd);
+      const pop = Math.min(1, localT / 0.3);
+      const scale = easeOutBack(pop);
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.translate(ARENA_W / 2, ARENA_H / 2 - 30);
+      ctx.rotate(-0.06);
+      ctx.scale(scale, scale);
+      ctx.font = '900 64px Segoe UI';
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = '#3a0606';
+      ctx.strokeText(FINISH_STAMP, 0, 0);
+      const grad = ctx.createLinearGradient(-260, 0, 260, 0);
+      grad.addColorStop(0, '#ffd166'); grad.addColorStop(0.5, '#ff3d3d'); grad.addColorStop(1, '#ffd166');
+      ctx.fillStyle = grad;
+      ctx.fillText(FINISH_STAMP, 0, 0);
+      ctx.restore();
+
+      if (localT > 0.35) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, (localT - 0.35) / 0.25);
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 22px Segoe UI';
+        ctx.fillStyle = '#eaf6ff';
+        ctx.fillText(`${winner.displayName}'s ${info.name}!`, ARENA_W / 2, ARENA_H / 2 + 40);
+        ctx.restore();
+      }
+    }
+  }
+
   function render() {
     ctx.save();
     if (effects && effects.shake > 0) {
@@ -552,15 +829,20 @@
     }
     drawBackground();
     if (p1 && p2) {
-      const order = p1.x <= p2.x ? [p1, p2] : [p2, p1];
-      for (const f of order) drawFighter(f);
+      if (match && match.phase === 'fatality') {
+        drawFatalityScene(match.finisher);
+      } else {
+        const order = p1.x <= p2.x ? [p1, p2] : [p2, p1];
+        for (const f of order) drawFighter(f);
+      }
       drawParticles();
     }
     ctx.restore();
 
     if (match && match.phase !== 'menu') {
-      drawHUD();
-      drawBanner();
+      if (match.phase !== 'fatality') drawHUD();
+      if (match.phase === 'finish-prompt') drawFinishPrompt(match.finisher);
+      else drawBanner();
     }
   }
 

@@ -16,9 +16,17 @@ open `fight.html`.
 - Each fighter has three moves — a punch, a kick and a special:
   - **🦈 Zeus** (fast & aggressive): Bite, Tail Slap, Frenzy Dash.
   - **🐢 Friday** (tanky & defensive): Flipper Jab, Shell Stomp, Shell Spin (super armor).
-- Controls — **Player 1 (Zeus)**: `A`/`D` move, `W` jump, `S` block, `F` punch,
-  `G` kick, `H` special. **Player 2 (Friday)**: arrow keys to move/jump/block,
-  `K` punch, `L` kick, `;` special. `Esc` returns to the setup screen.
+- **Defense has depth**: hold Block to soak damage as chip, or tap it right as a hit
+  lands for a **Perfect Block** — zero damage plus a free punish on the attacker.
+  **Dodge Roll** grants a brief invincibility window to slip through an attack
+  entirely, on a short cooldown so it can't be spammed.
+- Win the deciding round with a K.O. and you get a **"FINISH HIM/HER!"** prompt,
+  then a **REEF-ALITY** finisher animation (Mortal-Kombat-style, aquarium-safe —
+  no gore) before the match-end screen.
+- Controls — **Player 1 (Zeus)**: `A`/`D` move, `W` jump, `S` block, `E` dodge,
+  `F` punch, `G` kick, `H` special. **Player 2 (Friday)**: arrow keys to
+  move/jump/block, `/` dodge, `K` punch, `L` kick, `;` special. `Esc` returns to
+  the setup screen.
 
 ## 🌊 Friday's Ocean Dash (`dodge.html`)
 

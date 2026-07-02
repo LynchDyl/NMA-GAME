@@ -41,6 +41,8 @@
   }
   .card h1 { font-size: 1.9rem; margin-bottom: 6px; }
   .card .sub { opacity: 0.8; margin-bottom: 18px; font-size: 0.9rem; }
+  .brand-logo { height: 38px; width: auto; margin: 0 auto 14px; display: block; }
+  .brand-logo.small { height: 26px; margin: 14px auto 0; opacity: 0.9; }
 
   .mode-row { display: flex; gap: 12px; justify-content: center; margin-bottom: 18px; flex-wrap: wrap; }
   .toggle-btn {
@@ -94,8 +96,17 @@
   #end-screen h1 { font-size: 2.1rem; margin-bottom: 4px; }
   #end-screen .winner-line { font-size: 1.1rem; opacity: 0.85; margin-bottom: 20px; }
 
-  .credit { margin-top: 6px; font-size: 0.75rem; opacity: 0.75; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .credit { margin-top: 6px; font-size: 0.75rem; opacity: 0.75; display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; }
   .credit .dot { opacity: 0.5; }
+  .credit img.logo { height: 20px; width: auto; opacity: 0.9; }
+
+  .tip {
+    background: rgba(255,209,102,0.08); border: 1px solid rgba(255,209,102,0.3);
+    border-radius: 10px; padding: 10px 14px; font-size: 0.82rem; opacity: 0.9;
+    margin-bottom: 18px; text-align: left; line-height: 1.5;
+  }
+  .tip b { color: #ffd166; }
+
   @media (max-width: 560px) {
     .card { padding: 20px 16px; }
     .movelist { min-width: 100%; }
@@ -111,6 +122,7 @@
   <!-- Start / setup screen -->
   <div id="start-screen" class="layer">
     <div class="card">
+      <img class="brand-logo" src="assets/logos/nma.png" alt="National Marine Aquarium" onerror="this.remove()">
       <h1>🥊 Reef Rumble</h1>
       <div class="sub">A Mortal-Kombat-style scrap between Zeus the zebra shark and Friday the turtle</div>
 
@@ -141,6 +153,7 @@
           <div class="row"><span>Move</span><b><kbd>A</kbd> <kbd>D</kbd></b></div>
           <div class="row"><span>Jump</span><b><kbd>W</kbd></b></div>
           <div class="row"><span>Block</span><b><kbd>S</kbd></b></div>
+          <div class="row"><span>Dodge Roll</span><b><kbd>E</kbd></b></div>
           <div class="row"><span>Bite (punch)</span><b><kbd>F</kbd></b></div>
           <div class="row"><span>Tail Slap (kick)</span><b><kbd>G</kbd></b></div>
           <div class="row"><span>Frenzy Dash (special)</span><b><kbd>H</kbd></b></div>
@@ -150,10 +163,19 @@
           <div class="row"><span>Move</span><b><kbd>&larr;</kbd> <kbd>&rarr;</kbd></b></div>
           <div class="row"><span>Jump</span><b><kbd>&uarr;</kbd></b></div>
           <div class="row"><span>Block</span><b><kbd>&darr;</kbd></b></div>
+          <div class="row"><span>Dodge Roll</span><b><kbd>/</kbd></b></div>
           <div class="row"><span>Flipper Jab (punch)</span><b><kbd>K</kbd></b></div>
           <div class="row"><span>Shell Stomp (kick)</span><b><kbd>L</kbd></b></div>
           <div class="row"><span>Shell Spin (special)</span><b><kbd>;</kbd></b></div>
         </div>
+      </div>
+
+      <div class="tip">
+        <b>Sophisticated defense:</b> hold Block to soak damage as chip, but tap it in the
+        instant before a hit lands for a <b>Perfect Block</b> — zero damage and a free punish.
+        Dodge Roll gives a brief window of invincibility to slip through attacks entirely
+        (short cooldown, so time it well). Land the final K.O. of a match to trigger a
+        <b>REEF-ALITY</b> finisher!
       </div>
 
       <div class="btn-row">
@@ -161,6 +183,7 @@
       </div>
       <a class="more" href="index.html">&larr; More games</a>
       <div class="credit">
+        <img class="logo" src="assets/logos/nma.png" alt="" onerror="this.remove()">
         <span>Best of 3 rounds</span><span class="dot">&bull;</span><span>Inspired by the residents of the National Marine Aquarium, Plymouth</span>
       </div>
     </div>
@@ -169,6 +192,7 @@
   <!-- Match-end screen -->
   <div id="end-screen" class="layer hidden">
     <div class="card">
+      <img class="brand-logo small" src="assets/logos/nma.png" alt="National Marine Aquarium" onerror="this.remove()">
       <h1 id="end-title">🏆 ZEUS WINS THE MATCH!</h1>
       <div class="winner-line" id="end-sub">2 — 1</div>
       <div class="btn-row">
